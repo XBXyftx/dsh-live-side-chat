@@ -1,4 +1,4 @@
-# Side Chat (`dsh-side-chat`)
+# Side Chat (`dsh-side-chat-plugin`)
 
 > [中文](README.zh-CN.md) | English
 
@@ -27,7 +27,7 @@ It is related to, but not the same as, a fork:
 ## Install
 
 ```sh
-dsh plugin add dsh-side-chat
+dsh plugin add dsh-side-chat-plugin
 ```
 
 Or from a local checkout while developing:

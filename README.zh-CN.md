@@ -1,4 +1,4 @@
-# 侧边对话（Side Chat）
+# 侧边对话（`dsh-side-chat-plugin`）
 
 > 中文 | [English](README.md)
 
@@ -27,7 +27,7 @@
 ## 安装
 
 ```sh
-dsh plugin add dsh-side-chat
+dsh plugin add dsh-side-chat-plugin
 ```
 
 或从本地目录安装（开发时）：

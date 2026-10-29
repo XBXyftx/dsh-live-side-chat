@@ -11,7 +11,7 @@
  * module table. Styling uses component-local <style> with `--dsw-*` tokens.
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-side-chat',
+  id: 'dsh-side-chat-plugin',
   factory(require) {
     const React = require('react')
     const h = React.createElement
@@ -25,7 +25,7 @@ window.__ModuleLoader__.load({
     const RESOURCE_PREFIX = 'dsh-resource://sidechat/session/'
     const STORAGE_KEY = 'dsh.side-chat.v1'
     const PANEL_ID = 'side-chat'
-    const NPM_URL = 'https://www.npmjs.com/package/dsh-side-chat'
+    const NPM_URL = 'https://www.npmjs.com/package/dsh-side-chat-plugin'
     const GITHUB_URL = 'https://github.com/XBXyftx/dsh-side-chat'
 
     const zh = {

@@ -1,5 +1,5 @@
 {
-  "name": "dsh-side-chat",
+  "name": "dsh-side-chat-plugin",
   "version": "0.1.0",
   "description": "Codex-style side chat for DeepSeek Harness: a temporary read-only branch of the current session in the right sidebar, destroyed when closed.",
   "license": "MIT",
