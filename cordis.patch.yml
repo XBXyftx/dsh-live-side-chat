@@ -4,4 +4,4 @@
 # Later profile/--patch layers can override the row by id.
 - insert:
     - id: side-chat
-      name: dsh-side-chat
+      name: dsh-side-chat-plugin
