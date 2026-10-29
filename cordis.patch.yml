@@ -1,0 +1,7 @@
+# dsh-side-chat bundle patch.
+# Mounts the Host half (side-chat service, RPC channel, model-facing tools).
+# The client half ships through `package.json` `dsh.client`; it needs no row.
+# Later profile/--patch layers can override the row by id.
+- insert:
+    - id: side-chat
+      name: dsh-side-chat

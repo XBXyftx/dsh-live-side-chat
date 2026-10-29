@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Side Chat">
+  <defs>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#37c2a0"/>
+      <stop offset="1" stop-color="#2f7cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0d1a1f"/>
+  <rect x="30" y="10" width="24" height="44" rx="6" fill="#12303a" stroke="#2c6b7d" stroke-width="1.5"/>
+  <path d="M36 22h12M36 30h12M36 38h8" stroke="#59d6c0" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M12 20a5 5 0 0 1 5-5h9a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5h-3l-6 5v-5h-.5A5.5 5.5 0 0 1 11 29.5z" fill="url(#side)"/>
+  <path d="M18 24h9M18 29h6" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".92"/>
+</svg>

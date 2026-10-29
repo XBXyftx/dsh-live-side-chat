@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Side Chat",
+    "description": "Codex-style side chat in the right sidebar: a temporary read-only branch of the current session that answers questions about the work in progress and is destroyed when closed."
+  }
+}
