@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-30
+
+### Fixed
+
+- Tool calls failed in every session whose preset presents tools as PTC (`run_code` only): the read-only guard denied
+  `run_code` by name, and under such a preset that is the only tool a model may call directly, so asking the side chat
+  to check progress produced a stream of "the side chat is read-only" denials while the model retried. `run_code` is no
+  longer on the deny list; mutating tools reached from inside a program still hit the same guard on the same agent
+  scope, and the program body still runs under the session's read-only sandbox policy.
+
 ## [0.4.1] - 2026-10-30
 
 ### Added

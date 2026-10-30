@@ -1,6 +1,6 @@
 {
   "name": "dsh-live-side-chat",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Live side chat for DeepSeek Harness: an empty read-only conversation in the right sidebar that follows the current session live through a bounded real-time digest, so its progress never goes stale; destroyed when closed.",
   "license": "MIT",
   "type": "module",

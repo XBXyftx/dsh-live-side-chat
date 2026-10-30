@@ -38,3 +38,9 @@ test('the read-only guard covers the expected mutating tools', () => {
   assert.ok(!MUTATING_TOOLS.includes('read'))
   assert.ok(!MUTATING_TOOLS.includes('grep'))
 })
+
+test('the guard never blocks the PTC transport', () => {
+  // A PTC preset exposes only `run_code`; denying it would deny every tool in
+  // the side chat. Nested calls to real mutators stay denied by this guard.
+  assert.ok(!MUTATING_TOOLS.includes('run_code'))
+})

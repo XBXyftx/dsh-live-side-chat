@@ -40,6 +40,14 @@ export const REPORT_TOOL = 'side_chat_report'
  * Tools that can mutate the workspace or spawn unmetered work. A read-only side
  * chat denies them by name in addition to its sandbox mode, because a sandbox
  * refuses the write while the tool itself still runs (and can burn tokens).
+ *
+ * `run_code` is deliberately absent: under a PTC preset it is the only
+ * transport a model may call directly, so denying it by name denies every tool
+ * in the session, including this plugin's own read-only ones. What it carries
+ * stays covered: the tools a program reaches run through the registry's
+ * pre-execute gate on the same agent scope, so this guard still denies
+ * `write`/`edit`/`bash` and friends there, and the program body itself runs
+ * under the session's read-only sandbox policy.
  */
 export const MUTATING_TOOLS: readonly string[] = [
   'write',
@@ -49,7 +57,6 @@ export const MUTATING_TOOLS: readonly string[] = [
   'apply_patch',
   'bash',
   'pwsh',
-  'run_code',
   'terminal',
   'terminal_write',
   'job_start',

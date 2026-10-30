@@ -8,7 +8,7 @@ It is **not** a fork. It never copies the main session's history; it runs empty 
 
 - **Empty start** — the child session is created with no `seed` and no `isSeeded`, so the tab opens as a genuinely empty conversation. It can be created at any time; it no longer waits for the main session to complete a turn.
 - **Live digest, not a log copy** — the side chat learns about the main session from the plugin's own bounded `sideChatDigest` session projection, re-read as runtime context on every step. Work that happened *after* the side chat was created is visible; the digest is partial by design, so the model verifies details with the read-only tools before asserting them.
-- **Read-only** — the side session runs in the read-only sandbox mode (`sandbox/mode: read-only`), with approvals pinned to `never` and a tool guard on mutating tools. It can query, never write.
+- **Read-only** — the side session runs in the read-only sandbox mode (`sandbox/mode: read-only`), with approvals pinned to `never` and a tool guard on mutating tools. It can query, never write. The guard denies mutators by name but leaves the `run_code` transport alone, because a PTC preset exposes only that tool — mutators reached from inside a program are denied by the same guard, and the program body stays inside the read-only sandbox.
 - **Temporary** — the side session is **hidden** from the left session list and lives only in the right sidebar. Closing the tab asks for confirmation and then destroys it (agent disposed, session files deleted).
 - **Non-interrupting** — the main session keeps working. The side chat reads the main session's live progress at any time, and only hands a result back (as a **queued follow-up turn**) when you explicitly ask for it or it is genuinely necessary.
 
