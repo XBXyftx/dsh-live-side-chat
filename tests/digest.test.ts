@@ -152,6 +152,27 @@ describe('digest fold', () => {
     assert.deepEqual(digest.todos, [{ content: 'A', status: 'completed' }])
   })
 
+  it('records the provider/model of the newest routed request', () => {
+    const digest = foldAll([
+      event('request/header', { reason: 'initial', header: { config: { provider: 'cd', model: 'deepseek-flash' } } }),
+      event('turn/start', { turn: 1 }),
+      user('问一句'),
+    ])
+    assert.deepEqual(digest.model, { provider: 'cd', model: 'deepseek-flash' })
+    const same = event('request/header', { reason: 'change', header: { config: { provider: 'cd', model: 'deepseek-flash' } } })
+    const folded = digestFold()(digest, same)
+    assert.notEqual(folded.model, undefined)
+    assert.deepEqual(folded.model, { provider: 'cd', model: 'deepseek-flash' })
+  })
+
+  it('replaces the model when a later request routes elsewhere', () => {
+    const digest = foldAll([
+      event('request/header', { reason: 'initial', header: { config: { provider: 'cd', model: 'deepseek-flash' } } }),
+      event('request/header', { reason: 'change', header: { config: { provider: 'cd', model: 'gpt-6-astra' } } }),
+    ])
+    assert.deepEqual(digest.model, { provider: 'cd', model: 'gpt-6-astra' })
+  })
+
   it('bounds every retained string', () => {
     const digest = foldAll([
       event('turn/start', { turn: 1 }),
@@ -220,7 +241,7 @@ describe('renderer', () => {
   it('exposes one stable projection key', () => {
     const projection = createDigestProjection()
     assert.equal(projection.key, DIGEST_KEY)
-    assert.equal(projection.stateVersion, 1)
+    assert.equal(projection.stateVersion, 2)
     const state = projection.init({} as never, 0 as never)
     assert.deepEqual(projection.wire.view(state), emptyDigest())
   })

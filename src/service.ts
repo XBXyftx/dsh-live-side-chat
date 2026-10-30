@@ -16,7 +16,8 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent, AgentHandle, AgentSetup } from '@deepseek-ai/dsh-agent'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, AgentSetup, ModelSelection, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
@@ -52,6 +53,8 @@ interface SideChatEntry {
   readonly mainSessionId: SessionId
   readonly childSessionId: SessionId
   handle: AgentHandle
+  /** Mutable selection installed into the child agent's request path. */
+  readonly selection: ModelSelectionRef
 }
 
 /** Destruction outcome reported to the client. */
@@ -69,6 +72,24 @@ export class SideChatError extends Error {
     super(message)
     this.name = 'SideChatError'
   }
+}
+
+/** One selectable model of the Host's live LLM registry. */
+export interface SideChatModel {
+  readonly provider: string
+  readonly model: string
+  /** Provider-owned display name. */
+  readonly name: string
+  /** Provider display name, for grouping in a picker. */
+  readonly providerName: string
+}
+
+/** Current model of one side chat plus everything selectable. */
+export interface SideChatModelState {
+  /** Selection applied to the next request: the pending choice or the last routed model. */
+  readonly current: ModelSelection | null
+  /** Every currently routable model, grouped by provider order. */
+  readonly models: readonly SideChatModel[]
 }
 
 /** Everything the composition of one side chat needs at creation or resume. */
@@ -172,6 +193,8 @@ export class SideChatService {
   private readonly byMain = new Map<string, SessionId>()
   /** Last digest read from a main session's log while that session was not live. */
   private readonly fallbacks = new Map<string, SessionDigest>()
+  /** Model chosen for a side chat whose agent is not live yet; consumed on resume. */
+  private readonly pendingModels = new Map<string, ModelSelection>()
 
   constructor(
     private readonly ctx: Context,
@@ -215,8 +238,12 @@ export class SideChatService {
       cwd,
       ...(presetId === undefined ? {} : { presetId }),
     }
-    const composition = await this.compose(subject)
-    const model = this.ctx.get('agentDefaultModel')?.currentSelection()
+    const selection: ModelSelectionRef = {
+      current: this.ctx.get('agentDefaultModel')?.currentSelection(),
+      assembled: undefined,
+    }
+    const composition = await this.compose(subject, selection)
+    const model = selection.current
     // No `seed` and no `isSeeded`: the conversation must open empty. The child
     // only carries lineage (`parentSession`) so the sidebar can address it.
     const handle = await this.ctx.agents.create({
@@ -232,7 +259,7 @@ export class SideChatService {
         : { agentOptions: { provider: model.provider, model: model.model } }),
       setup: composition.setup,
     })
-    this.entries.set(childId, { mainSessionId, childSessionId: childId, handle })
+    this.entries.set(childId, { mainSessionId, childSessionId: childId, handle, selection })
     this.byMain.set(mainSessionId, childId)
     return { sessionId: childId, mainSessionId }
   }
@@ -248,7 +275,7 @@ export class SideChatService {
    * Resolve the composition for a side chat: the same preset mechanism the
    * session controller uses, expressed through the public preset service.
    */
-  private async compose(subject: SideChatSubject): Promise<{
+  private async compose(subject: SideChatSubject, selection: ModelSelectionRef): Promise<{
     readonly agentPreset?: string
     readonly setup: AgentSetup
   }> {
@@ -262,7 +289,7 @@ export class SideChatService {
       if (presets !== undefined && resolvedId !== undefined) {
         await presets.mount(agentCtx, resolvedId)
       }
-      this.composeSideChat(agentCtx, agent, subject)
+      this.composeSideChat(agentCtx, agent, subject, selection)
     }
     return {
       ...(resolvedId === undefined ? {} : { agentPreset: resolvedId }),
@@ -274,12 +301,21 @@ export class SideChatService {
    * Register the side chat's own prompt guidance, live main-session digest,
    * tools, read-only guard, and durable policy markers inside its agent scope.
    */
-  private composeSideChat(agentCtx: Context, agent: Agent, subject: SideChatSubject): void {
+  private composeSideChat(
+    agentCtx: Context,
+    agent: Agent,
+    subject: SideChatSubject,
+    selection: ModelSelectionRef,
+  ): void {
     agentCtx.systemPrompt.section({
       name: 'side-chat:role',
       order: 250,
       text: SIDE_CHAT_SYSTEM_SECTION,
     })
+    // Public agent hook: a mutable selection overrides the routed provider/model
+    // for the next request and re-labels the assembled prompt. The ref lives on
+    // the entry, so the sidebar can change it between turns.
+    installModelSelection(agentCtx, selection)
     if (this.config.liveContext) {
       agentCtx.systemPrompt.context({
         name: 'side-chat:main-digest',
@@ -357,6 +393,7 @@ export class SideChatService {
     const persistence = this.ctx.get('sessionPersistence')
     const stillStored = persistence === undefined ? undefined : await persistence.stat(id)
     this.entries.delete(childSessionId)
+    this.pendingModels.delete(childSessionId)
     const mainId = entry?.mainSessionId
     if (mainId !== undefined && this.byMain.get(mainId) === id) {
       this.byMain.delete(mainId)
@@ -396,7 +433,9 @@ export class SideChatService {
     const observation = await this.ctx.sessionQuery.observeSession(asSessionId(childSessionId), { projectionMode: 'all' })
     let mainSessionId: SessionId | undefined
     let subject: SideChatSubject
+    let resumedModel: ModelSelection | undefined
     try {
+      resumedModel = observation.projections?.values.sideChatDigest?.model ?? undefined
       mainSessionId = observation.header.parentSession
       if (mainSessionId === undefined) {
         throw new SideChatError('not-a-side-chat', '侧边对话缺少父会话记录，无法继续。')
@@ -411,8 +450,12 @@ export class SideChatService {
     } finally {
       observation[Symbol.dispose]()
     }
-    const composition = await this.compose(subject)
-    const model = this.ctx.get('agentDefaultModel')?.currentSelection()
+    const selection: ModelSelectionRef = {
+      current: this.pendingModels.get(childSessionId) ?? resumedModel,
+      assembled: undefined,
+    }
+    const composition = await this.compose(subject, selection)
+    const model = selection.current
     const handle = await this.ctx.agents.resume({
       resumeSessionId: asSessionId(childSessionId),
       ...(model === undefined
@@ -420,9 +463,82 @@ export class SideChatService {
         : { agentOptions: { provider: model.provider, model: model.model } }),
       setup: composition.setup,
     })
-    this.entries.set(childSessionId, { mainSessionId, childSessionId: asSessionId(childSessionId), handle })
+    this.entries.set(childSessionId, {
+      mainSessionId, childSessionId: asSessionId(childSessionId), handle, selection,
+    })
     this.byMain.set(mainSessionId, asSessionId(childSessionId))
     return handle.agent
+  }
+
+  /**
+   * Every model this Host can currently route, plus the side chat's current
+   * selection, for the composer's model chip.
+   * @param childSessionId - side-chat session id.
+   */
+  async modelState(childSessionId: string): Promise<SideChatModelState> {
+    const entry = this.entries.get(childSessionId)
+    const fromDigest = this.readDigestOf(childSessionId)?.model
+    const selection = entry?.selection.current
+      ?? this.pendingModels.get(childSessionId)
+      ?? (fromDigest === null ? undefined : fromDigest)
+      ?? this.ctx.get('agentDefaultModel')?.currentSelection()
+    return {
+      current: selection === undefined ? null : { ...selection },
+      models: await this.listModels(),
+    }
+  }
+
+  /**
+   * Route the next side-chat request to another model.
+   * @param childSessionId - side-chat session id.
+   * @param selection - requested provider/model pair.
+   * @returns the selection the Host resolved and installed.
+   */
+  async selectModel(
+    childSessionId: string,
+    selection: { provider: string; model: string },
+  ): Promise<{ selected: ModelSelection }> {
+    if (!isSideChatSessionId(childSessionId)) {
+      throw new SideChatError('not-a-side-chat', '只能为本插件创建的侧边对话选择模型。')
+    }
+    const resolved = await this.ctx.llm.resolveCallConfig({
+      provider: selection.provider,
+      model: selection.model,
+    })
+    const selected: ModelSelection = {
+      provider: resolved.provider,
+      model: resolved.model,
+      ...(resolved.reasoningEffort === undefined ? {} : { reasoningEffort: resolved.reasoningEffort }),
+    }
+    const entry = this.entries.get(childSessionId)
+    if (entry === undefined) this.pendingModels.set(childSessionId, selected)
+    else entry.selection.current = selected
+    return { selected: { ...selected } }
+  }
+
+  /** Read the side chat's own digest, carrying its last routed model. */
+  private readDigestOf(childSessionId: string): SessionDigest | undefined {
+    const session = this.ctx.sessions.get(asSessionId(childSessionId))
+    if (session === undefined) return undefined
+    return this.ctx.sessionProjections.stateOf(session, DIGEST_KEY)
+  }
+
+  /** Enumerate the Host's routable models, tolerating per-provider failures. */
+  private async listModels(): Promise<readonly SideChatModel[]> {
+    const models: SideChatModel[] = []
+    for (const provider of this.ctx.llm.listProviders()) {
+      let entries
+      try {
+        entries = await this.ctx.llm.listModels(provider.id)
+      } catch (error) {
+        console.warn(`dsh-side-chat: cannot list models of provider "${provider.id}":`, error)
+        continue
+      }
+      for (const model of entries) {
+        models.push({ provider: provider.id, model: model.id, name: model.name, providerName: provider.name })
+      }
+    }
+    return models
   }
 
   private requireAgent(childSessionId: string): Agent {

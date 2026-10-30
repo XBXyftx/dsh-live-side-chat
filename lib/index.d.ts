@@ -20,7 +20,8 @@ export declare const name = "side-chat";
  * `connection` and `webServer` are part of the dependency set because Connection
  * attributes its web route to the context that reads the service, so the plugin
  * root itself must own both (a runtime `ctx.inject` child does not).
- * `sessionProjections` carries the live digest the side chat reads.
+ * `sessionProjections` carries the live digest the side chat reads, and `llm`
+ * enumerates and validates the models its composer can switch to.
  */
 export declare const inject: string[];
 export { Config };

@@ -72,6 +72,12 @@ export interface DigestTodo {
   readonly status: 'pending' | 'in_progress' | 'completed'
 }
 
+/** The provider/model pair a session last used for one model request. */
+export interface DigestModel {
+  readonly provider: string
+  readonly model: string
+}
+
 /** Wire and fold state of the live session digest. */
 export interface SessionDigest {
   /** First human prompt of the session, bounded; `''` before the first prompt. */
@@ -84,6 +90,8 @@ export interface SessionDigest {
   readonly todos: readonly DigestTodo[] | null
   /** Most recent tool calls across the session, oldest first. */
   readonly recentTools: readonly DigestTool[]
+  /** Provider/model of the newest logged request, or `null` before the first one. */
+  readonly model: DigestModel | null
   /** Newest failure reason, bounded. */
   readonly lastError: string | null
   /** Monotonic counters that survive the bounded arrays. */
@@ -267,6 +275,17 @@ function applyEvent(
         lastActivityAt: event.time,
       }
     }
+    case 'request/header': {
+      const config = event.data.header.config
+      if (state.model?.provider === config.provider && state.model.model === config.model) {
+        return { ...state, lastActivityAt: event.time }
+      }
+      return {
+        ...state,
+        model: { provider: config.provider, model: config.model },
+        lastActivityAt: event.time,
+      }
+    }
     case 'step/start': {
       if (state.openTurn === null) return state
       if (event.data.step <= state.openTurn.steps) return state
@@ -347,6 +366,7 @@ export function emptyDigest(): SessionDigest {
     openTurn: null,
     todos: null,
     recentTools: [],
+    model: null,
     lastError: null,
     counts: { turns: 0, tools: 0, errors: 0 },
     lastActivityAt: 0,
@@ -380,6 +400,11 @@ const turnSchema: ZodType<DigestTurn> = zod.object({
   errors: zod.number(),
 })
 
+const modelSchema: ZodType<DigestModel> = zod.object({
+  provider: zod.string(),
+  model: zod.string(),
+})
+
 const openTurnSchema: ZodType<DigestOpenTurn> = zod.object({
   turn: zod.number(),
   prompt: zod.string(),
@@ -397,6 +422,7 @@ export const digestSchema: ZodType<SessionDigest> = zod.object({
   openTurn: zod.union([openTurnSchema, zod.null()]),
   todos: zod.union([zod.array(todoSchema), zod.null()]),
   recentTools: zod.array(toolSchema),
+  model: zod.union([modelSchema, zod.null()]),
   lastError: zod.union([zod.string(), zod.null()]),
   counts: zod.object({
     turns: zod.number(),
@@ -442,7 +468,7 @@ export function createDigestProjection(
       // identity comparison suppresses publication across unrelated events.
       view: state => state,
     },
-    stateVersion: 1,
+    stateVersion: 2,
   }
 }
 

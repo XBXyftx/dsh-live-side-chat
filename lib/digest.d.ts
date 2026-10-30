@@ -59,6 +59,11 @@ export interface DigestTodo {
     readonly content: string;
     readonly status: 'pending' | 'in_progress' | 'completed';
 }
+/** The provider/model pair a session last used for one model request. */
+export interface DigestModel {
+    readonly provider: string;
+    readonly model: string;
+}
 /** Wire and fold state of the live session digest. */
 export interface SessionDigest {
     /** First human prompt of the session, bounded; `''` before the first prompt. */
@@ -71,6 +76,8 @@ export interface SessionDigest {
     readonly todos: readonly DigestTodo[] | null;
     /** Most recent tool calls across the session, oldest first. */
     readonly recentTools: readonly DigestTool[];
+    /** Provider/model of the newest logged request, or `null` before the first one. */
+    readonly model: DigestModel | null;
     /** Newest failure reason, bounded. */
     readonly lastError: string | null;
     /** Monotonic counters that survive the bounded arrays. */

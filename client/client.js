@@ -18,6 +18,7 @@ window.__ModuleLoader__.load({
   id: 'dsh-side-chat-plugin',
   factory(require) {
     const React = require('react')
+    const ReactDOM = require('react-dom')
     const h = React.createElement
 
     const NS = 'side-chat'
@@ -34,9 +35,9 @@ window.__ModuleLoader__.load({
     const GITHUB_URL = 'https://github.com/XBXyftx/dsh-side-chat'
 
     const zh = {
-      'panel.label': '侧边对话',
-      'page.title': '侧边对话',
-      'page.subtitle': 'Codex 风格的临时只读分支：在右侧向另一条对话询问当前工作的进展，关闭即销毁。',
+      'panel.label': '实时侧边对话',
+      'page.title': '实时侧边对话',
+      'page.subtitle': '与主会话实时同步进度：空会话起步，问到的是它此刻正在做的事，不会过时；只读、不打断，关闭即销毁。',
       'setting.title': '允许向主会话发送消息',
       'setting.desc': '开启后，侧边对话可以在你明确要求或确有必要时，把讨论结果作为后续轮次交给主会话；它不会打断主会话当前的工作。',
       'setting.loading': '正在读取配置…',
@@ -46,7 +47,7 @@ window.__ModuleLoader__.load({
       'author.desc': '由 XBXyftx 开发，MIT 开源。',
       'tab.title': '侧边对话',
       'guide.title': '侧边对话',
-      'guide.description': '向一条只读的临时分支提问',
+      'guide.description': '实时同步主会话进度，随时提问，不会过时',
       'draft.creating': '正在为当前会话创建侧边对话…',
       'draft.failed': '创建侧边对话失败',
       'draft.retry': '重试',
@@ -59,6 +60,11 @@ window.__ModuleLoader__.load({
       'composer.readonly': '只读',
       'composer.empty': '消息不能为空。',
       'composer.hint': 'Enter 发送 / Shift+Enter 换行',
+      'model.loading': '正在读取模型…',
+      'model.failed': '模型列表读取失败',
+      'model.unknown': '默认模型',
+      'model.title': '选择模型',
+      'model.failedSwitch': '切换失败：{message}',
       'close.title': '关闭侧边聊天？',
       'close.description': '这个侧边聊天将被删除，且无法恢复。你确定吗？',
       'close.dontAsk': '不再询问',
@@ -89,9 +95,9 @@ window.__ModuleLoader__.load({
       'quick.failed': '发送失败：{message}',
     }
     const en = {
-      'panel.label': 'Side Chat',
-      'page.title': 'Side Chat',
-      'page.subtitle': 'A Codex-style temporary read-only branch: ask about the current work in the right sidebar. Closing destroys it.',
+      'panel.label': 'Live Side Chat',
+      'page.title': 'Live Side Chat',
+      'page.subtitle': 'Follows the main session live: it starts empty, answers about what that session is doing right now, and never goes stale. Read-only, non-interrupting, destroyed on close.',
       'setting.title': 'Allow messages to the main session',
       'setting.desc': 'When on, a side chat may hand a confirmed result back to the main session as a queued follow-up turn — only when you ask for it or it is genuinely necessary. It never interrupts the current work.',
       'setting.loading': 'Reading configuration…',
@@ -101,7 +107,7 @@ window.__ModuleLoader__.load({
       'author.desc': 'Built by XBXyftx. MIT licensed.',
       'tab.title': 'Side chat',
       'guide.title': 'Side chat',
-      'guide.description': 'Ask a read-only temporary branch',
+      'guide.description': 'Live main-session progress you can question any time',
       'draft.creating': 'Creating a side chat for this session…',
       'draft.failed': 'Could not create the side chat',
       'draft.retry': 'Retry',
@@ -114,6 +120,11 @@ window.__ModuleLoader__.load({
       'composer.readonly': 'Read-only',
       'composer.empty': 'Message cannot be empty.',
       'composer.hint': 'Enter sends / Shift+Enter adds a line',
+      'model.loading': 'Reading models…',
+      'model.failed': 'Could not read the model list',
+      'model.unknown': 'Default model',
+      'model.title': 'Choose a model',
+      'model.failedSwitch': 'Switch failed: {message}',
       'close.title': 'Close this side chat?',
       'close.description': 'The side chat will be deleted and cannot be recovered. Continue?',
       'close.dontAsk': "Don't ask again",
@@ -319,6 +330,27 @@ window.__ModuleLoader__.load({
       .dsh-side-chat-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px;
         border:1px solid var(--dsw-alias-border-l2, ${color.border}); font-size:12px; line-height:18px;
         color:${color.secondary}; }
+      .dsh-side-chat-composer-tools { display:flex; align-items:center; gap:8px; min-width:0; }
+      .dsh-side-chat-model { display:inline-flex; align-items:center; gap:4px; max-width:180px; padding:2px 8px;
+        border:1px solid var(--dsw-alias-border-l2, ${color.border}); border-radius:999px; background:transparent;
+        font:inherit; font-size:12px; line-height:18px; color:${color.secondary}; cursor:pointer; }
+      .dsh-side-chat-model:hover { background:color-mix(in srgb, ${color.text} 6%, transparent); color:${color.text}; }
+      .dsh-side-chat-model-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .dsh-side-chat-model-menu { position:fixed; z-index:80; display:flex; flex-direction:column; gap:2px;
+        width:250px; max-height:280px; overflow-y:auto; padding:6px; box-sizing:border-box;
+        border:1px solid var(--dsw-alias-border-l1, ${color.border}); border-radius:12px;
+        background:var(--dsw-alias-bg-layer-2, ${color.surface}); color:${color.text};
+        box-shadow:0 14px 36px rgba(0,0,0,.32); }
+      .dsh-side-chat-model-group { padding:6px 8px 2px; font-size:11px; color:${color.muted}; }
+      .dsh-side-chat-model-item { display:flex; align-items:center; gap:8px; width:100%; padding:6px 8px;
+        border:0; border-radius:8px; background:transparent; color:${color.text}; font:inherit; font-size:13px;
+        text-align:left; cursor:pointer; }
+      .dsh-side-chat-model-item:hover { background:color-mix(in srgb, ${color.text} 8%, transparent); }
+      .dsh-side-chat-model-item[aria-current="true"] { color:var(--dsw-alias-state-business-primary, ${color.accent}); }
+      .dsh-side-chat-model-check { flex:none; width:14px; height:14px; }
+      .dsh-side-chat-model-item-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+        white-space:nowrap; }
+      .dsh-side-chat-model-item-id { flex:0 0 auto; font-size:11px; color:${color.muted}; }
       .dsh-side-chat-send { display:grid; place-items:center; flex:none; width:34px; height:34px; padding:0;
         border:0; border-radius:999px; background:var(--dsw-alias-button-info-fill, ${color.accent}); color:#fff;
         cursor:pointer; transition:background-color 100ms ease; }
@@ -650,6 +682,125 @@ window.__ModuleLoader__.load({
       return sideSessions.has(owner.sessionId) ? { sideChat: true } : null
     }
 
+    /**
+     * Model chip of the side-chat composer: shows the model the next request
+     * will route to, and opens a picker listing every model this Host can
+     * currently route. The choice is a Host-side selection ref, so it applies to
+     * the next turn only and never touches the main session.
+     */
+    function SideChatModelChip({ sessionId, t }) {
+      const [state, setState] = React.useState({ status: 'loading', current: null, models: [] })
+      const [open, setOpen] = React.useState(false)
+      const [anchor, setAnchor] = React.useState(null)
+      const [error, setError] = React.useState(null)
+      const chipRef = React.useRef(null)
+
+      const load = React.useCallback(async () => {
+        const result = await callRpc('models', { sessionId })
+        if (!result.ok) { setState(prev => ({ ...prev, status: 'failed' })); return }
+        const value = result.value || {}
+        setState({ status: 'ready', current: value.current || null, models: Array.isArray(value.models) ? value.models : [] })
+      }, [sessionId])
+
+      React.useEffect(() => { void load() }, [load])
+
+      React.useEffect(() => {
+        if (!open) return undefined
+        const onDown = event => {
+          if (chipRef.current !== null && chipRef.current.contains(event.target)) return
+          setOpen(false)
+        }
+        const onKey = event => { if (event.key === 'Escape') setOpen(false) }
+        document.addEventListener('mousedown', onDown)
+        document.addEventListener('keydown', onKey)
+        return () => {
+          document.removeEventListener('mousedown', onDown)
+          document.removeEventListener('keydown', onKey)
+        }
+      }, [open])
+
+      const chosen = state.current === null
+        ? undefined
+        : state.models.find(item => item.provider === state.current.provider && item.model === state.current.model)
+      const label = state.status === 'loading'
+        ? t('model.loading')
+        : state.status === 'failed'
+          ? t('model.failed')
+          : (chosen === undefined ? (state.current === null ? t('model.unknown') : state.current.model) : chosen.name)
+
+      const toggle = () => {
+        if (open) { setOpen(false); return }
+        const rect = chipRef.current === null ? null : chipRef.current.getBoundingClientRect()
+        if (rect !== null) setAnchor({ bottom: Math.max(8, window.innerHeight - rect.top + 8), right: Math.max(8, window.innerWidth - rect.right) })
+        setOpen(true)
+        void load()
+      }
+
+      const pick = async item => {
+        setError(null)
+        const result = await callRpc('select-model', { sessionId, provider: item.provider, model: item.model })
+        if (!result.ok) { setError(t('model.failedSwitch', { message: result.error.message })); return }
+        setOpen(false)
+        await load()
+      }
+
+      const grouped = []
+      for (const item of state.models) {
+        const last = grouped[grouped.length - 1]
+        if (last !== undefined && last.providerName === item.providerName) last.models.push(item)
+        else grouped.push({ providerName: item.providerName, models: [item] })
+      }
+
+      const menu = open && anchor !== null
+        ? ReactDOM.createPortal(h('div', {
+          className: 'dsh-side-chat-model-menu',
+          'data-dsh-side-chat-model-menu': '',
+          style: { bottom: anchor.bottom, right: anchor.right },
+          role: 'menu',
+          'aria-label': t('model.title'),
+        },
+        state.status === 'loading' ? h('div', { className: 'dsh-side-chat-model-group' }, t('model.loading')) : null,
+        state.status === 'failed' ? h('div', { className: 'dsh-side-chat-model-group' }, t('model.failed')) : null,
+        ...grouped.flatMap(group => [
+          h('div', { key: `g-${group.providerName}`, className: 'dsh-side-chat-model-group' }, group.providerName),
+          ...group.models.map(item => {
+            const active = state.current !== null
+              && state.current.provider === item.provider && state.current.model === item.model
+            return h('button', {
+              key: `${item.provider}/${item.model}`,
+              type: 'button',
+              role: 'menuitemradio',
+              'aria-current': active ? 'true' : 'false',
+              className: 'dsh-side-chat-model-item',
+              onClick: () => { void pick(item) },
+            },
+            h('span', { className: 'dsh-side-chat-model-check' }, active
+              ? h('svg', { viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': true },
+                h('path', { d: 'M3.5 8.5l3 3 6-7', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }))
+              : null),
+            h('span', { className: 'dsh-side-chat-model-item-name' }, item.name),
+            item.name === item.model ? null : h('span', { className: 'dsh-side-chat-model-item-id' }, item.model))
+          }),
+        ])), document.body)
+        : null
+
+      return h('div', { style: { display: 'inline-flex' }, ref: chipRef },
+        h('button', {
+          type: 'button',
+          className: 'dsh-side-chat-model',
+          'data-dsh-side-chat-model': '',
+          title: t('model.title'),
+          'aria-haspopup': 'menu',
+          'aria-expanded': open ? 'true' : 'false',
+          onClick: toggle,
+        },
+        h('span', { className: 'dsh-side-chat-model-name' }, label),
+        h('svg', { viewBox: '0 0 16 16', width: 12, height: 12, 'aria-hidden': true },
+          h('path', { d: 'M4 6.5l4 4 4-4', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }))),
+        menu,
+        error === null ? null : h('div', { className: 'dsh-side-chat-error-inline', style: { position: 'absolute', bottom: '100%' } }, error))
+    }
+
     function SideChatComposer({ sessionId, session, t }) {
       const [value, setValue] = React.useState('')
       const [busy, setBusy] = React.useState(false)
@@ -689,6 +840,30 @@ window.__ModuleLoader__.load({
       const stopGlyph = h('svg', { viewBox: '0 0 16 16', width: 16, height: 16, 'aria-hidden': true },
         h('rect', { x: 3, y: 3, width: 10, height: 10, rx: 3, fill: 'currentColor' }))
 
+      const toolbar = h('div', { className: 'dsh-side-chat-composer-row' },
+        h('div', { className: 'dsh-side-chat-composer-meta' },
+          h('span', { className: 'dsh-side-chat-chip' }, t('composer.readonly'))),
+        h('div', { className: 'dsh-side-chat-composer-tools' },
+          h(SideChatModelChip, { sessionId, t }),
+          running
+            ? h('button', {
+              type: 'button',
+              className: 'dsh-side-chat-send',
+              'aria-label': t('composer.stop'),
+              title: t('composer.stop'),
+              'data-dsh-side-chat-send': '',
+              onClick: () => { void stop() },
+            }, stopGlyph)
+            : h('button', {
+              type: 'button',
+              className: 'dsh-side-chat-send',
+              'aria-label': t('composer.send'),
+              title: t('composer.send'),
+              'data-dsh-side-chat-send': '',
+              disabled: busy || value.trim().length === 0,
+              onClick: () => { void send() },
+            }, sendGlyph)))
+
       return h('div', { className: 'dsh-side-chat-composer' },
         h('div', { className: 'dsh-side-chat-composer-card' },
           h('textarea', {
@@ -700,27 +875,7 @@ window.__ModuleLoader__.load({
             onChange: event => setValue(event.target.value),
             onKeyDown,
           }),
-          h('div', { className: 'dsh-side-chat-composer-row' },
-            h('div', { className: 'dsh-side-chat-composer-meta' },
-              h('span', { className: 'dsh-side-chat-chip' }, t('composer.readonly'))),
-            running
-              ? h('button', {
-                type: 'button',
-                className: 'dsh-side-chat-send',
-                'aria-label': t('composer.stop'),
-                title: t('composer.stop'),
-                'data-dsh-side-chat-send': '',
-                onClick: () => { void stop() },
-              }, stopGlyph)
-              : h('button', {
-                type: 'button',
-                className: 'dsh-side-chat-send',
-                'aria-label': t('composer.send'),
-                title: t('composer.send'),
-                'data-dsh-side-chat-send': '',
-                disabled: busy || value.trim().length === 0,
-                onClick: () => { void send() },
-              }, sendGlyph))),
+          toolbar),
         error === null ? null : h('div', { className: 'dsh-side-chat-error-inline' }, error),
         h('div', { className: 'dsh-side-chat-composer-hint' },
           h('span', null, t('composer.hint'))))

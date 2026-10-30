@@ -14,6 +14,7 @@
  * @module dsh-side-chat/service
  */
 import type { Context } from '@deepseek-ai/cordis';
+import type { ModelSelection } from '@deepseek-ai/dsh-agent';
 import type { ContextFormed } from '@deepseek-ai/dsh-llm';
 import type { ResolvedSideChatConfig } from './config.ts';
 declare module '@deepseek-ai/dsh-llm' {
@@ -37,6 +38,22 @@ export declare class SideChatError extends Error {
     readonly code: string;
     constructor(code: string, message: string);
 }
+/** One selectable model of the Host's live LLM registry. */
+export interface SideChatModel {
+    readonly provider: string;
+    readonly model: string;
+    /** Provider-owned display name. */
+    readonly name: string;
+    /** Provider display name, for grouping in a picker. */
+    readonly providerName: string;
+}
+/** Current model of one side chat plus everything selectable. */
+export interface SideChatModelState {
+    /** Selection applied to the next request: the pending choice or the last routed model. */
+    readonly current: ModelSelection | null;
+    /** Every currently routable model, grouped by provider order. */
+    readonly models: readonly SideChatModel[];
+}
 /**
  * Owns every live side chat: creation, driving, live-digest context, bounded log
  * reads, reporting, and destruction.
@@ -48,6 +65,8 @@ export declare class SideChatService {
     private readonly byMain;
     /** Last digest read from a main session's log while that session was not live. */
     private readonly fallbacks;
+    /** Model chosen for a side chat whose agent is not live yet; consumed on resume. */
+    private readonly pendingModels;
     constructor(ctx: Context, config: ResolvedSideChatConfig);
     /**
      * Return this session's live side chat, creating an empty one when none exists.
@@ -89,6 +108,28 @@ export declare class SideChatService {
     disposeAll(): Promise<void>;
     /** Resolve a live side-chat agent, resuming it after an application restart. */
     private ensureLive;
+    /**
+     * Every model this Host can currently route, plus the side chat's current
+     * selection, for the composer's model chip.
+     * @param childSessionId - side-chat session id.
+     */
+    modelState(childSessionId: string): Promise<SideChatModelState>;
+    /**
+     * Route the next side-chat request to another model.
+     * @param childSessionId - side-chat session id.
+     * @param selection - requested provider/model pair.
+     * @returns the selection the Host resolved and installed.
+     */
+    selectModel(childSessionId: string, selection: {
+        provider: string;
+        model: string;
+    }): Promise<{
+        selected: ModelSelection;
+    }>;
+    /** Read the side chat's own digest, carrying its last routed model. */
+    private readDigestOf;
+    /** Enumerate the Host's routable models, tolerating per-provider failures. */
+    private listModels;
     private requireAgent;
     /** Resolve the main session id of one side chat from memory, then from its log. */
     private mainOf;

@@ -1,6 +1,6 @@
 {
   "name": "dsh-side-chat-plugin",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Codex-style live side chat for DeepSeek Harness: an empty read-only conversation in the right sidebar that follows the current session through a bounded live digest and is destroyed when closed.",
   "license": "MIT",
   "type": "module",

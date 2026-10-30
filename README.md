@@ -1,4 +1,4 @@
-# Side Chat (`dsh-side-chat-plugin`)
+# Live Side Chat (`dsh-side-chat-plugin`)
 
 > [中文](README.zh-CN.md) | English
 
@@ -25,6 +25,7 @@ It is **not** a fork. It never copies the main session's history; it runs empty 
 | Background digest | Collapsed panel in the strip; expands the exact block the model reads (same renderer as the injection) |
 | Empty greeting | Plugin-owned card naming the connected main session, plus three quick questions |
 | Composer | Anchored at the bottom of the panel and reusing the main conversation composer chrome: the same elevated rounded card, a read-only pill and a 34px circular send button |
+| Model chip | Shows the model the next turn will use and opens a picker over every model the Host can route (grouped by provider); the switch applies from the next turn only, and the main session is never touched |
 | Read-only tools | `side_chat_main_status` (freshest digest + running/idle) and `side_chat_main_history` (`turn` / `contains` filters, bounded, real log lines) |
 | Report back | `side_chat_report` queues a result into the main session; can be disabled in settings |
 | Close confirmation | "Close this side chat?" dialog with "Don't ask again"; cancel reopens the tab |

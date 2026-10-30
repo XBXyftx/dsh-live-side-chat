@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-30
+
+### Added
+
+- Model chip in the composer: shows the model the side chat's next request will use, and opens a picker with every model this Host can currently route (grouped by provider). The choice is Host-side state (`/side-chat/models`, `/side-chat/select-model`) and applies from the next turn without touching the main session.
+- `sideChatDigest` now records the provider/model of the newest logged request (`request/header`), so the chip also reflects what actually ran. Projection `stateVersion` 1 → 2.
+- Selecting a model on a side chat whose agent is not live yet records the choice and applies it when the side chat resumes on its next message.
+
+### Changed
+
+- Display name is now **Live Side Chat / 实时侧边对话** (left global panel, settings page, README titles) and the guide entry/subtitle describe the advantage explicitly: live progress that never goes stale, empty start, read-only, non-interrupting.
+- The composer's model picker can fail per model: a provider-side rejection is surfaced in the conversation instead of being hidden.
+
 ## [0.2.0] - 2026-10-30
 
 ### Added

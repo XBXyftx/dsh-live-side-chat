@@ -98,6 +98,17 @@ async function dispatch(service: SideChatService, endpoint: string, payload: unk
       await service.ask(readString(payload, 'sessionId'), readString(payload, 'text'))
       return { ok: true, value: { accepted: true } }
     }
+    case 'models': {
+      const state = await service.modelState(readString(payload, 'sessionId'))
+      return { ok: true, value: state }
+    }
+    case 'select-model': {
+      const result = await service.selectModel(readString(payload, 'sessionId'), {
+        provider: readString(payload, 'provider'),
+        model: readString(payload, 'model'),
+      })
+      return { ok: true, value: result }
+    }
     case 'digest': {
       const text = await service.contextPreview(readString(payload, 'sessionId'))
       return { ok: true, value: { text } }
