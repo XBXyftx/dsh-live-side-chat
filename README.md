@@ -1,4 +1,4 @@
-# Live Side Chat (`dsh-side-chat-plugin`)
+# Live Side Chat (`dsh-live-side-chat`)
 
 > [中文](README.zh-CN.md) | English
 
@@ -34,7 +34,7 @@ It is **not** a fork. It never copies the main session's history; it runs empty 
 ## Install
 
 ```sh
-dsh plugin add dsh-side-chat-plugin
+dsh plugin add dsh-live-side-chat
 ```
 
 Or from a local checkout while developing:

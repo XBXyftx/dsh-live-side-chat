@@ -1,7 +1,7 @@
 {
-  "name": "dsh-side-chat-plugin",
-  "version": "0.3.0",
-  "description": "Codex-style live side chat for DeepSeek Harness: an empty read-only conversation in the right sidebar that follows the current session through a bounded live digest and is destroyed when closed.",
+  "name": "dsh-live-side-chat",
+  "version": "0.4.0",
+  "description": "Live side chat for DeepSeek Harness: an empty read-only conversation in the right sidebar that follows the current session live through a bounded real-time digest, so its progress never goes stale; destroyed when closed.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -39,15 +39,18 @@
     "read-only",
     "live-digest",
     "session-projection",
-    "context-injection"
+    "context-injection",
+    "live",
+    "real-time",
+    "live-progress"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/XBXyftx/dsh-side-chat.git"
+    "url": "git+https://github.com/XBXyftx/dsh-live-side-chat.git"
   },
-  "homepage": "https://github.com/XBXyftx/dsh-side-chat#readme",
+  "homepage": "https://github.com/XBXyftx/dsh-live-side-chat#readme",
   "bugs": {
-    "url": "https://github.com/XBXyftx/dsh-side-chat/issues"
+    "url": "https://github.com/XBXyftx/dsh-live-side-chat/issues"
   },
   "engines": {
     "node": ">=22.19.0",

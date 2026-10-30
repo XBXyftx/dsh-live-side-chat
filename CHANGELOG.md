@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-30
+
+### Changed
+
+- **Renamed the package to `dsh-live-side-chat`** (npm and the GitHub repository). The old `dsh-side-chat-plugin` line is
+  deprecated and points here; nothing else about the plugin changed. The name now carries the `live` signal next to the
+  `side chat` words, which is what the plugin actually does and how it can be found; `dsh-side-chat` alone was already
+  taken on npm and crowded in search results.
+- Display name, behaviour, config fields, RPC endpoints and the model chip are unchanged from 0.3.0.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
