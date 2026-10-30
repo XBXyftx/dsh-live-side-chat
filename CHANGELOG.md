@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-30
+
+### Added
+
+- Settings page gained the two pieces the previous plugin already had: a **version card** that checks the npm registry
+  automatically when the page opens (plus a manual "check for updates" button, showing `up to date` / `update available`
+  with the npm link) and a **blog link** next to npm/GitHub.
+- The installed version is read from the bundle registry (`remote.pluginManager.listBundles()`), so a published bump
+  shows up without rebuilding the client; a constant only covers a registry read that fails.
+
 ## [0.4.0] - 2026-10-30
 
 ### Changed

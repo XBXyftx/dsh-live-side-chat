@@ -33,6 +33,11 @@ window.__ModuleLoader__.load({
     const PANEL_ID = 'side-chat'
     const NPM_URL = 'https://www.npmjs.com/package/dsh-live-side-chat'
     const GITHUB_URL = 'https://github.com/XBXyftx/dsh-live-side-chat'
+    const BLOG_URL = 'https://xbxyftx.top'
+    const PACKAGE_NAME = 'dsh-live-side-chat'
+    const NPM_LATEST_URL = `https://registry.npmjs.org/${PACKAGE_NAME}/latest`
+    /** Kept in step with package.json; the bundle registry supersedes it when readable. */
+    const FALLBACK_VERSION = '0.4.1'
 
     const zh = {
       'panel.label': '实时侧边对话',
@@ -43,6 +48,14 @@ window.__ModuleLoader__.load({
       'setting.loading': '正在读取配置…',
       'setting.unavailable': '设置服务当前不可用，无法在线修改。',
       'setting.saveFailed': '保存失败，请重试。',
+      'link.npm': 'npm',
+      'link.blog': '博客',
+      'update.title': '版本更新',
+      'update.checking': '正在检查更新…',
+      'update.upToDate': '已是最新版本',
+      'update.available': '发现新版本',
+      'update.failed': '更新检查失败（不影响使用）',
+      'update.button': '检查更新',
       'author.title': '作者',
       'author.desc': '由 XBXyftx 开发，MIT 开源。',
       'tab.title': '侧边对话',
@@ -103,6 +116,14 @@ window.__ModuleLoader__.load({
       'setting.loading': 'Reading configuration…',
       'setting.unavailable': 'The settings service is unavailable; this value cannot be edited here.',
       'setting.saveFailed': 'Saving failed. Try again.',
+      'link.npm': 'npm',
+      'link.blog': 'Blog',
+      'update.title': 'Updates',
+      'update.checking': 'Checking for updates…',
+      'update.upToDate': 'Up to date',
+      'update.available': 'Update available',
+      'update.failed': 'Update check failed (the plugin still works)',
+      'update.button': 'Check for updates',
       'author.title': 'Author',
       'author.desc': 'Built by XBXyftx. MIT licensed.',
       'tab.title': 'Side chat',
@@ -203,6 +224,18 @@ window.__ModuleLoader__.load({
 
     function addressOf(sessionId) {
       return `${RESOURCE_PREFIX}${encodeURIComponent(sessionId)}`
+    }
+
+    /** Compare two semver-ish versions by numeric segments, ignoring pre-release tags. */
+    function compareVersions(a, b) {
+      const pa = String(a).split('-')[0].split('.').map(Number)
+      const pb = String(b).split('-')[0].split('.').map(Number)
+      for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+        const left = Number.isFinite(pa[i]) ? pa[i] : 0
+        const right = Number.isFinite(pb[i]) ? pb[i] : 0
+        if (left !== right) return left - right
+      }
+      return 0
     }
 
     /** Whether a digest value means "no turn has happened yet". */
@@ -935,13 +968,19 @@ window.__ModuleLoader__.load({
     }
 
     /** Settings page contribution: the one Host policy a user can change here. */
-    function SettingsPage({ form, t }) {
+    /**
+     * Settings page of the plugin row: the report-to-main policy, an automatic
+     * update check against the npm registry, and the author links.
+     */
+    function SettingsPage({ form, t, loadCurrentVersion }) {
       const snapshot = React.useSyncExternalStore(
         React.useCallback(listener => form.subscribe(listener), [form]),
         React.useCallback(() => form.getSnapshot(), [form]),
         React.useCallback(() => form.getSnapshot(), [form]))
       const [saving, setSaving] = React.useState(false)
       const [saveFailed, setSaveFailed] = React.useState(false)
+      const [currentVersion, setCurrentVersion] = React.useState(FALLBACK_VERSION)
+      const [update, setUpdate] = React.useState({ status: 'checking', latest: undefined })
       const ready = snapshot.status === 'ready'
       const allowed = Boolean(snapshot.value && snapshot.value.allowReportToMain)
       const hint = snapshot.status === 'loading'
@@ -949,6 +988,30 @@ window.__ModuleLoader__.load({
         : snapshot.status === 'unavailable'
           ? t('setting.unavailable')
           : saveFailed ? t('setting.saveFailed') : t('setting.desc')
+
+      const check = React.useCallback(async () => {
+        setUpdate(previous => ({ ...previous, status: 'checking' }))
+        try {
+          const response = await fetch(NPM_LATEST_URL)
+          if (!response.ok) throw new Error(String(response.status))
+          const data = await response.json()
+          setUpdate({ status: 'done', latest: typeof data.version === 'string' ? data.version : undefined })
+        } catch {
+          setUpdate({ status: 'failed', latest: undefined })
+        }
+      }, [])
+
+      React.useEffect(() => {
+        let cancelled = false
+        void loadCurrentVersion().then(version => { if (!cancelled) setCurrentVersion(version) })
+        void check()
+        return () => { cancelled = true }
+      }, [check, loadCurrentVersion])
+
+      const newer = update.status === 'done'
+        && update.latest !== undefined
+        && compareVersions(update.latest, currentVersion) > 0
+
       const toggle = async () => {
         if (!ready || saving) return
         setSaving(true)
@@ -962,6 +1025,7 @@ window.__ModuleLoader__.load({
           setSaving(false)
         }
       }
+
       return h('div', { className: 'dsh-side-chat-page' },
         h('div', null,
           h('h1', { style: { fontSize: 22, fontWeight: 650, margin: 0 } }, t('page.title')),
@@ -980,17 +1044,38 @@ window.__ModuleLoader__.load({
         h('section', { className: 'dsh-side-chat-card' },
           h('div', { className: 'dsh-side-chat-card-row' },
             h('div', null,
+              h('h2', null, t('update.title')),
+              h('p', null,
+                update.status === 'checking' ? t('update.checking')
+                  : update.status === 'failed' ? t('update.failed')
+                    : newer ? `${t('update.available')} · v${update.latest}`
+                      : `${t('update.upToDate')} · v${currentVersion}`),
+              newer
+                ? h('p', { style: { marginTop: 4 } },
+                  h('a', { href: NPM_URL, target: '_blank', rel: 'noreferrer', className: 'dsh-side-chat-link' },
+                    `${t('link.npm')} · v${update.latest}`))
+                : null),
+            h('button', {
+              type: 'button',
+              className: 'dsh-side-chat-button',
+              disabled: update.status === 'checking',
+              onClick: () => { void check() },
+            }, t('update.button')))),
+        h('section', { className: 'dsh-side-chat-card' },
+          h('div', { className: 'dsh-side-chat-card-row' },
+            h('div', null,
               h('h2', null, t('author.title')),
               h('p', null, t('author.desc'))),
             h('div', { style: { display: 'flex', gap: 14 } },
-              h('a', { href: NPM_URL, target: '_blank', rel: 'noreferrer', className: 'dsh-side-chat-link' }, 'npm'),
+              h('a', { href: BLOG_URL, target: '_blank', rel: 'noreferrer', className: 'dsh-side-chat-link' }, t('link.blog')),
+              h('a', { href: NPM_URL, target: '_blank', rel: 'noreferrer', className: 'dsh-side-chat-link' }, t('link.npm')),
               h('a', { href: GITHUB_URL, target: '_blank', rel: 'noreferrer', className: 'dsh-side-chat-link' }, 'GitHub')))))
     }
 
     return {
       inject: [
         'slots', 'locale', 'configForms', 'sessions', 'resources',
-        'sidebarRight', 'sidebarRightTabs', 'commandUi',
+        'sidebarRight', 'sidebarRightTabs', 'commandUi', 'remote', 'remote.pluginManager',
       ],
       apply(ctx) {
         ctxRef = ctx
@@ -1117,7 +1202,17 @@ window.__ModuleLoader__.load({
           },
         }), 'dsh-side-chat: /btw command')
 
-        // Settings page: the report-to-main policy.
+        // Settings page: report-to-main policy, npm update check, author links.
+        // The installed version comes from the bundle registry so a published
+        // bump is visible without rebuilding the client; the constant only
+        // covers a registry read that fails.
+        const loadCurrentVersion = () => Promise.resolve()
+          .then(() => ctx.remote.pluginManager.listBundles())
+          .then(rows => {
+            const found = (Array.isArray(rows) ? rows : []).find(row => row !== null && typeof row === 'object' && row.name === PACKAGE_NAME)
+            return found !== undefined && typeof found.version === 'string' ? found.version : FALLBACK_VERSION
+          })
+          .catch(() => FALLBACK_VERSION)
         const form = ctx.configForms.get(PANEL_ID)
         ctx.effect(() => ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
           name: 'sidebar.panellist',
@@ -1130,7 +1225,7 @@ window.__ModuleLoader__.load({
           name: 'main',
           key: PANEL_ID,
           locale: NS,
-          inject: () => ({ t, form }),
+          inject: () => ({ t, form, loadCurrentVersion }),
         }, SettingsPage)), 'dsh-side-chat: settings page')
       },
     }
