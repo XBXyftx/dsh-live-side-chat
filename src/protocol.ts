@@ -32,7 +32,8 @@ export const DESCRIPTOR_LABEL = 'Side chat'
 export const MAIN_MESSAGE_KIND = 'side-chat'
 
 /** Names of model-facing tools registered only inside a side-chat agent. */
-export const PROGRESS_TOOL = 'side_chat_progress'
+export const STATUS_TOOL = 'side_chat_main_status'
+export const HISTORY_TOOL = 'side_chat_main_history'
 export const REPORT_TOOL = 'side_chat_report'
 
 /**

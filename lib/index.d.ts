@@ -1,13 +1,15 @@
 /**
  * dsh-side-chat: a Codex-style side chat inside the right sidebar.
  *
- * The Host half creates a hidden, read-only child session seeded from the
- * invoking session's completed turns, exposes it to the browser half over a
- * private Connection RPC channel, gives the side chat read-only progress and
- * report tools, and destroys the session when the user closes the tab.
+ * The Host half creates a hidden, read-only child session that opens EMPTY, so
+ * the user can ask about the current work without interrupting it. The child
+ * learns about its main session through the plugin's bounded live digest fold
+ * (injected as runtime context on every step) and two read-only tools; it
+ * reports back only when asked, and closing the tab destroys it.
  *
  * The browser half ships as `./client` (a ModuleLoader factory) and owns the
- * guide entry, the `/btw` command, the sidebar tab, and the close confirmation.
+ * guide entry, the `/btw` command, the sidebar tab, the live status strip, and
+ * the close confirmation.
  * @module dsh-side-chat
  */
 import type { Context } from '@deepseek-ai/cordis';
@@ -18,10 +20,12 @@ export declare const name = "side-chat";
  * `connection` and `webServer` are part of the dependency set because Connection
  * attributes its web route to the context that reads the service, so the plugin
  * root itself must own both (a runtime `ctx.inject` child does not).
+ * `sessionProjections` carries the live digest the side chat reads.
  */
 export declare const inject: string[];
 export { Config };
 export type { SideChatConfig };
+export { DIGEST_KEY, type SessionDigest } from './digest.ts';
 export { SIDE_SESSION_PREFIX, PLUGIN_ID, RPC_CHANNEL, RESOURCE_PREFIX } from './protocol.ts';
 /**
  * Mount the Host half.

@@ -1,33 +1,64 @@
 /**
- * Model-facing tools of one side chat: read the main session's progress since
- * the snapshot, and (optionally) hand a discussion result back to the main
- * session as a queued follow-up turn.
+ * Model-facing tools of one side chat: read the main session's live digest,
+ * query its log for the details the digest leaves out, and (optionally) hand a
+ * discussion result back to the main session as a queued follow-up turn.
  *
- * Both tools are registered inside the side-chat agent's own setup scope, so no
+ * All three are registered inside the side-chat agent's own setup scope, so no
  * other agent can see or call them.
  * @module dsh-side-chat/tools
  */
 
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { PROGRESS_TOOL, REPORT_TOOL } from './protocol.ts'
+import { HISTORY_TOOL, REPORT_TOOL, STATUS_TOOL } from './protocol.ts'
 
 /** Host callbacks one side-chat agent's tools bind to. */
 export interface SideChatToolDeps {
-  /** Render the main session's progress after this chat's snapshot. */
-  readonly progress: () => Promise<string>
+  /** Render the main session's current digest and status. */
+  readonly status: () => Promise<string>
+  /** Read part of the main session's log. */
+  readonly history: (query: SideChatHistoryQuery) => Promise<string>
   /** Queue one report as a follow-up turn of the main session. */
   readonly report: (text: string) => Promise<{ readonly delivered: boolean; readonly detail: string }>
 }
 
-const PROGRESS_DESCRIPTION = 'Read what the main session has done since this side chat was created. '
-  + 'Use it when the user asks about current progress, recent changes, or whether some work finished. '
-  + 'It returns read-only facts from the main session log: user requests, assistant replies, tool calls, and the current todo list. '
-  + 'Call it again whenever the user asks for fresh progress; the side-chat snapshot itself never updates.'
+/** One bounded read of the main session's log. */
+export interface SideChatHistoryQuery {
+  /** Restrict to one turn number. */
+  readonly turn?: number
+  /** Restrict to events whose text contains this literal (case-insensitive). */
+  readonly contains?: string
+  /** Maximum rendered lines; the host clamps it. */
+  readonly limit?: number
+}
+
+const STATUS_DESCRIPTION = 'Read the main session\'s current state: its goal, the turn it is running right now, '
+  + 'its latest reply, recent tool calls, the todo list, and counters. Use it when the user asks how the work is going, '
+  + 'whether something finished, or what the main session is doing at this moment. '
+  + 'The background block injected into your context is a bounded digest of the same fold; call this tool when you need '
+  + 'the freshest reading rather than the one captured at your previous step.'
+
+const HISTORY_DESCRIPTION = 'Read details from the main session\'s log that the background digest left out. '
+  + 'Filter by `turn` (one turn number from the digest) and/or `contains` (a literal word such as a file name or error text). '
+  + 'Use it to check what was actually done, which files changed, or the exact wording of a failure — never infer those from the digest.'
 
 const REPORT_DESCRIPTION = 'Send one short message to the main session so its user sees the outcome of this side discussion. '
   + 'Call it ONLY when the user explicitly asks you to tell the main session, or when the outcome is something the main session must act on. '
   + 'Never use it for greetings, status pings, or your own conclusions the user has not confirmed. '
   + 'The message is queued behind the main session\'s current turn and never interrupts it.'
+
+/** One string-valued tool result: a rendered text block. */
+function textOutput(description: string) {
+  return {
+    schema: {
+      type: 'object' as const,
+      additionalProperties: false,
+      properties: {
+        text: { type: 'string' as const, required: true as const, description },
+      },
+    },
+    render: (_args: unknown, value: unknown) => [{ type: 'text' as const, text: (value as { text: string }).text }],
+  }
+}
 
 /**
  * Build the tools for one side chat.
@@ -35,22 +66,43 @@ const REPORT_DESCRIPTION = 'Send one short message to the main session so its us
  * @returns the tool definitions to register in the side-chat agent scope.
  */
 export function createSideChatTools(deps: SideChatToolDeps) {
-  const progress = defineTool({
-    name: PROGRESS_TOOL,
-    description: PROGRESS_DESCRIPTION,
+  const status = defineTool({
+    name: STATUS_TOOL,
+    description: STATUS_DESCRIPTION,
     parameters: {},
-    output: {
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          text: { type: 'string', required: true, description: 'Rendered progress digest.' },
-        },
-      },
-      render: (_args, value) => [{ type: 'text', text: (value as { text: string }).text }],
-    },
+    output: textOutput('Rendered main-session digest and status.'),
     async execute() {
-      return { text: await deps.progress() }
+      return { text: await deps.status() }
+    },
+  })
+
+  const history = defineTool({
+    name: HISTORY_TOOL,
+    description: HISTORY_DESCRIPTION,
+    parameters: {
+      turn: {
+        type: 'number',
+        description: 'Restrict the read to this turn number, as listed in the digest.',
+      },
+      contains: {
+        type: 'string',
+        description: 'Restrict the read to events whose text contains this literal (case-insensitive).',
+      },
+      limit: {
+        type: 'number',
+        description: 'Maximum rendered lines. The host clamps it.',
+      },
+    },
+    output: textOutput('Rendered log lines of the main session.'),
+    async execute(args) {
+      const query = args as { turn?: unknown; contains?: unknown; limit?: unknown }
+      return {
+        text: await deps.history({
+          ...(typeof query.turn === 'number' ? { turn: query.turn } : {}),
+          ...(typeof query.contains === 'string' ? { contains: query.contains } : {}),
+          ...(typeof query.limit === 'number' ? { limit: query.limit } : {}),
+        }),
+      }
     },
   })
 
@@ -84,5 +136,5 @@ export function createSideChatTools(deps: SideChatToolDeps) {
     },
   })
 
-  return [progress, report] as const
+  return [status, history, report] as const
 }

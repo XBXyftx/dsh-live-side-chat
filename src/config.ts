@@ -18,8 +18,15 @@ export interface SideChatConfig {
    * edit it on the running Host.
    */
   readonly allowReportToMain: boolean
-  /** Largest number of main-session events one progress read returns. */
-  readonly progressEventLimit: number
+  /**
+   * Inject the main session's live digest as background context on every side
+   * chat step. Turning it off leaves only the on-demand status tool.
+   */
+  readonly liveContext: boolean
+  /** Settled main-session turns the digest retains. */
+  readonly digestTurns: number
+  /** Largest number of main-session log lines one history read returns. */
+  readonly historyEventLimit: number
   /** Agent preset for side chats; an empty value inherits the main session's preset. */
   readonly preset: string
   /**
@@ -33,7 +40,9 @@ export interface SideChatConfig {
 export const Config = Schema.object({
   readOnly: Schema.boolean().default(true),
   allowReportToMain: Schema.boolean().default(true).volatile(),
-  progressEventLimit: Schema.number().min(1).max(500).default(60),
+  liveContext: Schema.boolean().default(true),
+  digestTurns: Schema.number().min(4).max(60).default(12),
+  historyEventLimit: Schema.number().min(5).max(200).default(40),
   preset: Schema.string().default(''),
   sessionsRoot: Schema.string().default(''),
 })

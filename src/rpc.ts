@@ -98,6 +98,10 @@ async function dispatch(service: SideChatService, endpoint: string, payload: unk
       await service.ask(readString(payload, 'sessionId'), readString(payload, 'text'))
       return { ok: true, value: { accepted: true } }
     }
+    case 'digest': {
+      const text = await service.contextPreview(readString(payload, 'sessionId'))
+      return { ok: true, value: { text } }
+    }
     case 'interrupt': {
       service.interrupt(readString(payload, 'sessionId'))
       return { ok: true, value: { interrupted: true } }

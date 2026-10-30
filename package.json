@@ -1,7 +1,7 @@
 {
   "name": "dsh-side-chat-plugin",
-  "version": "0.1.0",
-  "description": "Codex-style side chat for DeepSeek Harness: a temporary read-only branch of the current session in the right sidebar, destroyed when closed.",
+  "version": "0.2.0",
+  "description": "Codex-style live side chat for DeepSeek Harness: an empty read-only conversation in the right sidebar that follows the current session through a bounded live digest and is destroyed when closed.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -36,7 +36,10 @@
     "side-chat",
     "side-conversation",
     "codex",
-    "read-only"
+    "read-only",
+    "live-digest",
+    "session-projection",
+    "context-injection"
   ],
   "repository": {
     "type": "git",
@@ -57,12 +60,14 @@
     "@deepseek-ai/dsh-llm": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-sandbox-policy": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-session": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-session-projection": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-session-query": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-subagent": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-system-prompt": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-tools": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-user-approval": "^0.2.1-rc.2",
-    "@deepseek-ai/schemastery": "^3.18.5"
+    "@deepseek-ai/schemastery": "^3.18.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.5",
@@ -71,6 +76,7 @@
     "@deepseek-ai/dsh-llm": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-sandbox-policy": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-session": "^0.2.1-rc.2",
+    "@deepseek-ai/dsh-session-projection": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-session-query": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-subagent": "^0.2.1-rc.2",
     "@deepseek-ai/dsh-system-prompt": "^0.2.1-rc.2",
@@ -79,12 +85,13 @@
     "@deepseek-ai/dsh-user-approval": "^0.2.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.5",
     "@types/node": "^24.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --experimental-strip-types --test tests/protocol.test.ts"
+    "test": "node --experimental-strip-types --test tests/protocol.test.ts tests/digest.test.ts"
   },
   "dsh": {
     "bundle": {

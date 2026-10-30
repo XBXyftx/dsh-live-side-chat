@@ -23,7 +23,8 @@ export declare const DESCRIPTOR_LABEL = "Side chat";
 /** Messages the side chat may send to its main session carry this source kind. */
 export declare const MAIN_MESSAGE_KIND = "side-chat";
 /** Names of model-facing tools registered only inside a side-chat agent. */
-export declare const PROGRESS_TOOL = "side_chat_progress";
+export declare const STATUS_TOOL = "side_chat_main_status";
+export declare const HISTORY_TOOL = "side_chat_main_history";
 export declare const REPORT_TOOL = "side_chat_report";
 /**
  * Tools that can mutate the workspace or spawn unmetered work. A read-only side

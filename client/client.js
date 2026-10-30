@@ -7,6 +7,10 @@
  * the Host over the plugin's private RPC channel, and the close confirmation
  * that destroys the session.
  *
+ * The conversation tab starts on the shared empty hero with quick questions that
+ * send over the same private RPC channel, and pins the main session's live
+ * `sideChatDigest` projection in a compact status strip above the chat.
+ *
  * Loaded as a ModuleLoader factory: no bundler, no imports beyond the platform
  * module table. Styling uses component-local <style> with `--dsw-*` tokens.
  */
@@ -24,6 +28,7 @@ window.__ModuleLoader__.load({
     const RPC_CHANNEL = '/side-chat'
     const RESOURCE_PREFIX = 'dsh-resource://sidechat/session/'
     const STORAGE_KEY = 'dsh.side-chat.v1'
+    const DIGEST_KEY = 'sideChatDigest'
     const PANEL_ID = 'side-chat'
     const NPM_URL = 'https://www.npmjs.com/package/dsh-side-chat-plugin'
     const GITHUB_URL = 'https://github.com/XBXyftx/dsh-side-chat'
@@ -53,12 +58,35 @@ window.__ModuleLoader__.load({
       'composer.stop': '停止',
       'composer.readonly': '只读',
       'composer.empty': '消息不能为空。',
+      'composer.hint': 'Enter 发送 / Shift+Enter 换行',
       'close.title': '关闭侧边聊天？',
       'close.description': '这个侧边聊天将被删除，且无法恢复。你确定吗？',
       'close.dontAsk': '不再询问',
       'close.cancel': '取消',
       'close.confirm': '关闭侧边聊天',
       'close.failed': '关闭失败',
+      'status.disconnected': '未连接',
+      'status.turn': '第 {n} 轮',
+      'status.todos': '任务 {done}/{total}',
+      'status.tool': '工具 {name}',
+      'status.activity': '最近活动 {time}',
+      'status.justNow': '刚刚',
+      'status.secondsAgo': '{n} 秒前',
+      'status.minutesAgo': '{n} 分钟前',
+      'status.hoursAgo': '{n} 小时前',
+      'status.daysAgo': '{n} 天前',
+      'empty.title': '侧边对话',
+      'empty.mainFallback': '主会话',
+      'empty.connectedRunning': '已连接主会话「{title}」，它正在工作',
+      'empty.connectedIdle': '已连接主会话「{title}」',
+      'empty.hint': '这是一个全新的空会话，不会打断主会话。状态条显示它的实时进度；展开「背景摘要」可以看到侧边对话当前读到的内容。',
+      'digest.toggle': '背景摘要',
+      'digest.loading': '读取中…',
+      'digest.failed': '读取失败，请重试。',
+      'quick.progress': '现在进展到哪了？',
+      'quick.files': '正在改哪些文件？',
+      'quick.error': '刚才那个报错怎么回事？',
+      'quick.failed': '发送失败：{message}',
     }
     const en = {
       'panel.label': 'Side Chat',
@@ -85,12 +113,35 @@ window.__ModuleLoader__.load({
       'composer.stop': 'Stop',
       'composer.readonly': 'Read-only',
       'composer.empty': 'Message cannot be empty.',
+      'composer.hint': 'Enter sends / Shift+Enter adds a line',
       'close.title': 'Close this side chat?',
       'close.description': 'The side chat will be deleted and cannot be recovered. Continue?',
       'close.dontAsk': "Don't ask again",
       'close.cancel': 'Cancel',
       'close.confirm': 'Close side chat',
       'close.failed': 'Close failed',
+      'status.disconnected': 'Not connected',
+      'status.turn': 'Turn {n}',
+      'status.todos': 'Tasks {done}/{total}',
+      'status.tool': 'Tool {name}',
+      'status.activity': 'Last activity {time}',
+      'status.justNow': 'just now',
+      'status.secondsAgo': '{n}s ago',
+      'status.minutesAgo': '{n}m ago',
+      'status.hoursAgo': '{n}h ago',
+      'status.daysAgo': '{n}d ago',
+      'empty.title': 'Side chat',
+      'empty.mainFallback': 'the main session',
+      'empty.connectedRunning': 'Connected to 「{title}」, which is working',
+      'empty.connectedIdle': 'Connected to 「{title}」',
+      'empty.hint': 'This is a brand-new empty conversation and it never interrupts the main session. The strip above shows its live progress; expand "Background digest" to see exactly what this side chat reads.',
+      'digest.toggle': 'Background digest',
+      'digest.loading': 'Reading…',
+      'digest.failed': 'Could not read it. Try again.',
+      'quick.progress': 'What is the progress now?',
+      'quick.files': 'Which files are being changed?',
+      'quick.error': 'What was that error about?',
+      'quick.failed': 'Send failed: {message}',
     }
 
     const color = {
@@ -100,6 +151,9 @@ window.__ModuleLoader__.load({
       surface: 'var(--dsw-alias-bg-layer-1)',
       accent: 'var(--dsw-alias-brand-primary)',
       error: 'var(--dsw-alias-state-error-primary)',
+      idle: 'var(--dsw-alias-state-idle-primary)',
+      running: 'var(--dsw-alias-state-success-primary)',
+      muted: 'var(--dsw-alias-label-tertiary)',
     }
 
     /** Side-chat sessions this page knows, so the composer can claim only them. */
@@ -140,6 +194,65 @@ window.__ModuleLoader__.load({
       return `${RESOURCE_PREFIX}${encodeURIComponent(sessionId)}`
     }
 
+    /** Whether a digest value means "no turn has happened yet". */
+    function isDigestEmpty(digest) {
+      if (digest === undefined || digest === null) return true
+      const turns = Array.isArray(digest.turns) ? digest.turns : []
+      return turns.length === 0 && (digest.openTurn ?? null) === null
+    }
+
+    /** Number of the open turn, or of the newest settled turn. */
+    function digestTurnNumber(digest) {
+      const open = digest?.openTurn ?? null
+      if (open !== null && typeof open.turn === 'number') return open.turn
+      const turns = Array.isArray(digest?.turns) ? digest.turns : []
+      const last = turns.length === 0 ? undefined : turns[turns.length - 1]
+      if (typeof last?.turn === 'number') return last.turn
+      return typeof digest?.counts?.turns === 'number' ? digest.counts.turns : 0
+    }
+
+    /** Completed and total todo counts, absent when the session never wrote a list. */
+    function digestTodoProgress(digest) {
+      const todos = Array.isArray(digest?.todos) ? digest.todos : []
+      if (todos.length === 0) return undefined
+      let done = 0
+      for (const todo of todos) {
+        if (todo !== null && typeof todo === 'object' && todo.status === 'completed') done += 1
+      }
+      return { done, total: todos.length }
+    }
+
+    /** Newest tool name in the digest, preferring the open turn's calls. */
+    function digestToolName(digest) {
+      const openTools = Array.isArray(digest?.openTurn?.tools) ? digest.openTurn.tools : []
+      const openLast = openTools.length === 0 ? undefined : openTools[openTools.length - 1]
+      if (typeof openLast?.name === 'string' && openLast.name.length > 0) return openLast.name
+      const recent = Array.isArray(digest?.recentTools) ? digest.recentTools : []
+      const recentLast = recent.length === 0 ? undefined : recent[recent.length - 1]
+      return typeof recentLast?.name === 'string' && recentLast.name.length > 0 ? recentLast.name : undefined
+    }
+
+    /** Collapse whitespace and clip one digest line for the compact strip. */
+    function clipLine(text, limit) {
+      if (typeof text !== 'string') return ''
+      const normalized = text.replace(/\s+/g, ' ').trim()
+      if (normalized.length <= limit) return normalized
+      return `${normalized.slice(0, Math.max(0, limit - 1))}…`
+    }
+
+    /** Render one relative activity age with the namespace translator. */
+    function relativeActivityAt(t, at) {
+      if (typeof at !== 'number' || !Number.isFinite(at)) return ''
+      const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000))
+      if (seconds < 5) return t('status.justNow')
+      if (seconds < 60) return t('status.secondsAgo', { n: seconds })
+      const minutes = Math.floor(seconds / 60)
+      if (minutes < 60) return t('status.minutesAgo', { n: minutes })
+      const hours = Math.floor(minutes / 60)
+      if (hours < 24) return t('status.hoursAgo', { n: hours })
+      return t('status.daysAgo', { n: Math.floor(hours / 24) })
+    }
+
     function SideChatIcon({ size = 16 }) {
       return h('svg', {
         viewBox: '0 0 24 24', width: size, height: size, fill: 'none',
@@ -154,6 +267,21 @@ window.__ModuleLoader__.load({
     const STYLE_TEXT = `
       .dsh-side-chat-root { display:flex; flex-direction:column; height:100%; min-height:0; color:${color.text}; }
       .dsh-side-chat-body { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+      .dsh-side-chat-conversation { position:relative; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+      .dsh-side-chat-status { flex:0 0 auto; display:flex; flex-direction:column; gap:2px; padding:6px 12px;
+        border-bottom:1px solid ${color.border}; background:var(--dsw-alias-bg-layer-1); min-width:0;
+        font-size:11px; line-height:1.45; color:${color.secondary}; }
+      .dsh-side-chat-status-row { display:flex; align-items:center; gap:8px; min-width:0; }
+      .dsh-side-chat-status-dot { flex:0 0 auto; width:7px; height:7px; border-radius:999px; background:${color.idle}; }
+      .dsh-side-chat-status-dot.is-running { background:${color.running}; }
+      .dsh-side-chat-status-title { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+        white-space:nowrap; color:${color.text}; font-weight:600; }
+      .dsh-side-chat-status-meta { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+        white-space:nowrap; }
+      .dsh-side-chat-status-activity { flex:0 0 auto; margin-left:auto; white-space:nowrap; color:${color.muted}; }
+      .dsh-side-chat-status-muted { flex:1 1 auto; min-width:0; color:${color.muted}; }
+      .dsh-side-chat-status-prompt { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        color:${color.muted}; }
       .dsh-side-chat-center { flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
         gap:10px; padding:24px; text-align:center; font-size:13px; color:${color.secondary}; }
       .dsh-side-chat-center strong { color:${color.text}; font-size:14px; font-weight:600; }
@@ -165,17 +293,62 @@ window.__ModuleLoader__.load({
       .dsh-side-chat-button[disabled] { opacity:.5; cursor:default; }
       .dsh-side-chat-button-primary { background:${color.accent}; border-color:${color.accent}; color:#fff; }
       .dsh-side-chat-button-danger { background:${color.error}; border-color:${color.error}; color:#fff; }
-      .dsh-side-chat-composer { flex:0 0 auto; border-top:1px solid ${color.border}; padding:10px 12px 12px;
-        display:flex; flex-direction:column; gap:8px; background:var(--dsw-alias-bg-layer-1); }
-      .dsh-side-chat-composer-row { display:flex; align-items:flex-end; gap:8px; }
-      .dsh-side-chat-input { flex:1 1 auto; resize:none; min-height:38px; max-height:160px; box-sizing:border-box;
-        border:1px solid ${color.border}; border-radius:10px; padding:9px 11px; font:inherit; font-size:13px;
-        line-height:1.45; color:${color.text}; background:transparent; outline:none; }
-      .dsh-side-chat-input:focus { border-color:${color.accent}; }
-      .dsh-side-chat-hint { display:flex; justify-content:space-between; align-items:center; gap:8px;
-        font-size:11px; color:${color.secondary}; }
-      .dsh-side-chat-badge { border:1px solid ${color.border}; border-radius:999px; padding:1px 8px; font-size:11px; }
+      /* In-flow spacer substituting the empty transcript, so the composer seat
+         (position:sticky; bottom:0 inside dsh's scroll body) has something above
+         it and therefore actually parks at the bottom. */
+      .dsh-side-chat-views-empty { flex:1 0 auto; min-height:0; }
+      /* Composer: same surface, corner radius, elevation and send circle as the
+         main conversation composer (dsh ui-conversation InputBar). */
+      .dsh-side-chat-composer { flex:0 0 auto; display:flex; flex-direction:column; gap:2px; width:100%;
+        padding:0 var(--dsh-composer-side-clearance, 8px) 4px; box-sizing:border-box; }
+      .dsh-side-chat-composer-card { box-sizing:border-box; display:flex; flex-direction:column; gap:12px;
+        width:100%; max-width:var(--dsh-composer-card-max-width, 100%); margin:0 auto; padding:8px 8px 6px;
+        border:0; border-radius:var(--dsw-radius-panel, 14px); background:var(--dsw-specific-input-major);
+        box-shadow:var(--dsw-elevation-soft, 0 2px 8px rgba(0,0,0,.16));
+        font-size:var(--dsh-content-font-size, 14px); line-height:calc(24px + var(--dsh-content-font-delta, 0px)); }
+      .dsh-side-chat-composer-input { resize:none; box-sizing:border-box; margin:0; padding:0 10px 0 12px;
+        border:0; background:transparent; outline:none; font:inherit; color:${color.text};
+        min-height:24px; max-height:var(--dsh-composer-text-max-height, 336px); }
+      .dsh-side-chat-composer-input::placeholder { color:${color.muted}; }
+      .dsh-side-chat-composer-row { display:flex; align-items:center; justify-content:space-between; gap:8px;
+        padding:0 0 0 12px; min-height:34px; }
+      .dsh-side-chat-composer-meta { display:flex; align-items:center; gap:8px; min-width:0; font-size:12px;
+        color:${color.secondary}; }
+      /* Reads-only chip: the same pill geometry as dsh's permission/model chips
+         in the main composer toolbar. */
+      .dsh-side-chat-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px;
+        border:1px solid var(--dsw-alias-border-l2, ${color.border}); font-size:12px; line-height:18px;
+        color:${color.secondary}; }
+      .dsh-side-chat-send { display:grid; place-items:center; flex:none; width:34px; height:34px; padding:0;
+        border:0; border-radius:999px; background:var(--dsw-alias-button-info-fill, ${color.accent}); color:#fff;
+        cursor:pointer; transition:background-color 100ms ease; }
+      .dsh-side-chat-send:hover:not([disabled]) { background:var(--dsw-alias-button-info-hover, ${color.accent}); }
+      .dsh-side-chat-send[disabled] { opacity:.4; cursor:default; }
+      .dsh-side-chat-composer-hint { display:flex; justify-content:space-between; align-items:center; gap:8px;
+        width:100%; max-width:var(--dsh-composer-card-max-width, 100%); margin:0 auto; padding:2px 4px 0;
+        font-size:11px; color:${color.muted}; }
       .dsh-side-chat-error-inline { color:${color.error}; font-size:12px; }
+      .dsh-side-chat-quick { display:flex; flex-direction:column; align-items:flex-end; gap:4px; min-width:0; }
+      .dsh-side-chat-quick-row { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; }
+      .dsh-side-chat-empty { position:absolute; inset:0 0 96px; display:flex; align-items:center; justify-content:center;
+        padding:24px 18px; pointer-events:none; }
+      .dsh-side-chat-empty-card { display:flex; flex-direction:column; align-items:center; gap:10px; max-width:420px;
+        text-align:center; pointer-events:auto; }
+      .dsh-side-chat-empty-title { font-size:14px; font-weight:600; color:${color.text}; }
+      .dsh-side-chat-empty-line { display:flex; align-items:center; gap:7px; font-size:12.5px; color:${color.secondary}; }
+      .dsh-side-chat-empty-hint { font-size:12px; line-height:1.5; color:${color.muted}; }
+      .dsh-side-chat-digest-toggle { margin-left:auto; appearance:none; border:0; background:transparent; padding:0 2px;
+        color:${color.muted}; font-size:11px; cursor:pointer; text-decoration:underline dotted; }
+      .dsh-side-chat-digest-toggle:hover { color:${color.text}; }
+      .dsh-side-chat-digest { max-height:210px; overflow:auto; margin:2px 0 0; padding:8px 10px; border-radius:8px;
+        border:1px solid ${color.border}; background:var(--dsw-alias-bg-layer-2, ${color.surface});
+        font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; line-height:1.5;
+        white-space:pre-wrap; word-break:break-word; color:${color.secondary}; }
+      .dsh-side-chat-quick-chip { appearance:none; border:1px solid ${color.border}; border-radius:999px;
+        background:transparent; color:${color.secondary}; padding:4px 10px; font-size:12px; line-height:1.3;
+        white-space:nowrap; cursor:pointer; }
+      .dsh-side-chat-quick-chip:hover { background:color-mix(in srgb, ${color.text} 6%, transparent); color:${color.text}; }
+      .dsh-side-chat-quick-chip[disabled] { opacity:.5; cursor:default; }
       .dsh-side-chat-mask { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
         background:rgba(0,0,0,.42); padding:24px; }
       .dsh-side-chat-dialog { width:min(430px, 100%); border-radius:14px; border:1px solid ${color.border};
@@ -304,16 +477,148 @@ window.__ModuleLoader__.load({
           h('div', null, t('draft.creating'))))
     }
 
-    /** Conversation body rendered inside the retained session provider. */
-    function SideChatConversation({ renderFactorySlot }) {
-      return h('div', { className: 'dsh-side-chat-body' },
-        renderFactorySlot('conversation.content', {
-          variant: 'embedded', phase: 'active', hero: false,
-        }, { slots: { views: FixedChatView } }))
+    /**
+     * Compact live status of the main session, read from that session's
+     * `sideChatDigest` projection, with a collapsed panel showing the exact
+     * background block the Host injects into this side chat.
+     *
+     * dsh hides ordinary runtime-context rows from the Chat transcript
+     * (`isVisibleChatNode`), so this panel is how the user checks what the side
+     * chat actually knows.
+     */
+    function SideChatStatus({ mainId, sessionId, useSessions, t }) {
+      const running = useSessions(state => state.byId[mainId]?.running)
+      const title = useSessions(state => state.byId[mainId]?.displayTitle)
+      const digest = useSessions(state => state.projectionsBySession[mainId]?.values?.[DIGEST_KEY])
+      const [panel, setPanel] = React.useState({ open: false, loading: false, text: null, failed: false })
+
+      const toggle = React.useCallback(async () => {
+        if (panel.open) { setPanel({ open: false, loading: false, text: null, failed: false }); return }
+        setPanel({ open: true, loading: true, text: null, failed: false })
+        const result = await callRpc('digest', { sessionId })
+        if (!result.ok) { setPanel({ open: true, loading: false, text: null, failed: true }); return }
+        const text = result.value && typeof result.value.text === 'string' ? result.value.text : ''
+        setPanel({ open: true, loading: false, text, failed: false })
+      }, [panel.open, sessionId])
+
+      const toggleButton = sessionId === undefined ? null : h('button', {
+        className: 'dsh-side-chat-digest-toggle',
+        type: 'button',
+        'data-dsh-side-chat-digest-toggle': '',
+        onClick: () => { void toggle() },
+      }, panel.open ? t('digest.toggle') + ' ▾' : t('digest.toggle') + ' ▸')
+
+      const panelBody = panel.open
+        ? h('pre', { className: 'dsh-side-chat-digest', 'data-dsh-side-chat-digest': '' },
+          panel.loading ? t('digest.loading') : panel.failed ? t('digest.failed') : (panel.text === null ? '' : panel.text))
+        : null
+
+      if (digest === undefined || digest === null) {
+        return h('div', { className: 'dsh-side-chat-status', 'data-dsh-side-chat-status': '' },
+          h('div', { className: 'dsh-side-chat-status-row' },
+            h('span', { className: 'dsh-side-chat-status-dot' }),
+            h('span', { className: 'dsh-side-chat-status-muted' }, t('status.disconnected')),
+            toggleButton),
+          panelBody)
+      }
+
+      const turn = digestTurnNumber(digest)
+      const todos = digestTodoProgress(digest)
+      const tool = digestToolName(digest)
+      const prompt = clipLine(digest?.openTurn?.prompt, 48)
+      const at = typeof digest?.lastActivityAt === 'number' ? digest.lastActivityAt : undefined
+      const meta = []
+      if (turn > 0) meta.push(t('status.turn', { n: turn }))
+      if (todos !== undefined) meta.push(t('status.todos', { done: todos.done, total: todos.total }))
+      if (tool !== undefined) meta.push(t('status.tool', { name: tool }))
+
+      return h('div', { className: 'dsh-side-chat-status', 'data-dsh-side-chat-status': '' },
+        h('div', { className: 'dsh-side-chat-status-row' },
+          h('span', {
+            className: running === true ? 'dsh-side-chat-status-dot is-running' : 'dsh-side-chat-status-dot',
+          }),
+          title === undefined ? null : h('span', { className: 'dsh-side-chat-status-title' }, title),
+          meta.length === 0 ? null : h('span', { className: 'dsh-side-chat-status-meta' }, meta.join(' · ')),
+          at === undefined ? null : h('span', { className: 'dsh-side-chat-status-activity' },
+            t('status.activity', { time: relativeActivityAt(t, at) })),
+          toggleButton),
+        prompt === '' ? null : h('div', { className: 'dsh-side-chat-status-prompt' }, prompt),
+        panelBody)
     }
 
-    function FixedChatView(props) {
-      return props.renderSlot('conversation.session', { view: 'chat' })
+    /** The three questions offered by the empty side chat. */
+    const QUICK_QUESTIONS = ['quick.progress', 'quick.files', 'quick.error']
+
+    /**
+     * Empty-side-chat greeting, overlaid on the still-empty transcript. It is
+     * our own card rather than the shared blank hero because the workspace
+     * chrome of that hero does not apply to a side chat, which is not a
+     * workspace session.
+     */
+    function SideChatEmpty({ sessionId, mainTitle, running, t }) {
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState(null)
+      const ask = React.useCallback(async key => {
+        if (busy) return
+        setBusy(true)
+        setError(null)
+        const result = await callRpc('ask', { sessionId, text: t(key) })
+        setBusy(false)
+        if (!result.ok) setError(t('quick.failed', { message: result.error.message }))
+      }, [busy, sessionId, t])
+      const target = mainTitle === undefined || mainTitle === '' ? t('empty.mainFallback') : mainTitle
+      return h('div', { className: 'dsh-side-chat-empty', 'data-dsh-side-chat-empty': '' },
+        h('div', { className: 'dsh-side-chat-empty-card' },
+          h('strong', { className: 'dsh-side-chat-empty-title' }, t('empty.title')),
+          h('div', { className: 'dsh-side-chat-empty-line' },
+            h('span', {
+              className: running === true ? 'dsh-side-chat-status-dot is-running' : 'dsh-side-chat-status-dot',
+            }),
+            h('span', null, running === true
+              ? t('empty.connectedRunning', { title: target })
+              : t('empty.connectedIdle', { title: target }))),
+          h('div', { className: 'dsh-side-chat-empty-hint' }, t('empty.hint')),
+          h('div', { className: 'dsh-side-chat-quick-row' },
+            ...QUICK_QUESTIONS.map(key => h('button', {
+              key,
+              className: 'dsh-side-chat-quick-chip',
+              disabled: busy,
+              onClick: () => { void ask(key) },
+            }, t(key)))),
+          error === null ? null : h('div', { className: 'dsh-side-chat-error-inline' }, error)))
+    }
+
+    /**
+     * Conversation body: the live main-session status strip above the embedded
+     * chat, plus our empty greeting while the side chat itself has no turn yet.
+     * The shared blank hero is never used, so no workspace chrome leaks in.
+     */
+    function SideChatConversation({ sessionId, useSession, useSessions, renderFactorySlot, t }) {
+      const mainId = useSession(snapshot => snapshot?.subagent?.address?.parentSessionId)
+      const mainTitle = useSessions(state => (mainId === undefined ? undefined : state.byId[mainId]?.displayTitle))
+      const mainRunning = useSessions(state => (mainId === undefined ? undefined : state.byId[mainId]?.running))
+      const digest = useSessions(state => state.projectionsBySession[sessionId]?.values?.[DIGEST_KEY])
+      const empty = isDigestEmpty(digest)
+      return h('div', { className: 'dsh-side-chat-body' },
+        h(SideChatStatus, { mainId, sessionId, useSessions, t }),
+        h('div', { className: 'dsh-side-chat-conversation' },
+          renderFactorySlot('conversation.content', {
+            variant: 'embedded', phase: 'active', hero: false,
+          }, { slots: { views: SideChatViews } }),
+          empty
+            ? h(SideChatEmpty, { sessionId, mainTitle, running: mainRunning, t })
+            : null))
+    }
+
+    /**
+     * Views position of the embedded conversation: an empty side chat renders a
+     * flexible spacer so dsh's sticky composer seat has content above it and
+     * parks at the bottom; otherwise the real Chat view renders.
+     */
+    function SideChatViews({ sessionId, useSessions, renderSlot }) {
+      const digest = useSessions(state => state.projectionsBySession[sessionId]?.values?.[DIGEST_KEY])
+      if (isDigestEmpty(digest)) return h('div', { className: 'dsh-side-chat-views-empty' })
+      return renderSlot('conversation.session', { view: 'chat' })
     }
 
     /** Resource tab body: retains the side-chat session and hosts its conversation. */
@@ -375,27 +680,50 @@ window.__ModuleLoader__.load({
         }
       }
 
+      // Same glyph geometry as dsh's primary send button (ui-conversation InputBar).
+      const sendGlyph = h('svg', { viewBox: '0 0 16 16', width: 16, height: 16, 'aria-hidden': true },
+        h('path', {
+          d: 'M8.3125 0.980183C8.66767 1.0531 8.97902 1.20418 9.2627 1.43233C9.48724 1.61297 9.73029 1.85793 9.97949 2.10714L14.707 6.83468L13.293 8.24874L9 3.95577V15.0417H7V3.95577L2.70703 8.24874L1.29297 6.83468L6.02051 2.10714C6.26971 1.85793 6.51277 1.61297 6.7373 1.43233C6.97662 1.23986 7.28445 1.04402 7.6875 0.980183C7.8973 0.947006 8.1031 0.95516 8.3125 0.980183Z',
+          fill: 'currentColor',
+        }))
+      const stopGlyph = h('svg', { viewBox: '0 0 16 16', width: 16, height: 16, 'aria-hidden': true },
+        h('rect', { x: 3, y: 3, width: 10, height: 10, rx: 3, fill: 'currentColor' }))
+
       return h('div', { className: 'dsh-side-chat-composer' },
-        h('div', { className: 'dsh-side-chat-composer-row' },
+        h('div', { className: 'dsh-side-chat-composer-card' },
           h('textarea', {
-            className: 'dsh-side-chat-input',
+            className: 'dsh-side-chat-composer-input',
             rows: 1,
             value,
             placeholder: t('composer.placeholder'),
+            'data-dsh-side-chat-input': '',
             onChange: event => setValue(event.target.value),
             onKeyDown,
           }),
-          running
-            ? h('button', { className: 'dsh-side-chat-button', onClick: () => { void stop() } }, t('composer.stop'))
-            : h('button', {
-              className: 'dsh-side-chat-button dsh-side-chat-button-primary',
-              disabled: busy || value.trim().length === 0,
-              onClick: () => { void send() },
-            }, t('composer.send'))),
+          h('div', { className: 'dsh-side-chat-composer-row' },
+            h('div', { className: 'dsh-side-chat-composer-meta' },
+              h('span', { className: 'dsh-side-chat-chip' }, t('composer.readonly'))),
+            running
+              ? h('button', {
+                type: 'button',
+                className: 'dsh-side-chat-send',
+                'aria-label': t('composer.stop'),
+                title: t('composer.stop'),
+                'data-dsh-side-chat-send': '',
+                onClick: () => { void stop() },
+              }, stopGlyph)
+              : h('button', {
+                type: 'button',
+                className: 'dsh-side-chat-send',
+                'aria-label': t('composer.send'),
+                title: t('composer.send'),
+                'data-dsh-side-chat-send': '',
+                disabled: busy || value.trim().length === 0,
+                onClick: () => { void send() },
+              }, sendGlyph))),
         error === null ? null : h('div', { className: 'dsh-side-chat-error-inline' }, error),
-        h('div', { className: 'dsh-side-chat-hint' },
-          h('span', { className: 'dsh-side-chat-badge' }, t('composer.readonly')),
-          h('span', null, 'Enter 发送 / Shift+Enter 换行')))
+        h('div', { className: 'dsh-side-chat-composer-hint' },
+          h('span', null, t('composer.hint'))))
     }
 
     /** The close confirmation dialog, mounted on the frame-wide overlay seat. */
