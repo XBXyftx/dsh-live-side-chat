@@ -21,6 +21,14 @@ export interface SideChatConfig {
      * chat step. Turning it off leaves only the on-demand status tool.
      */
     readonly liveContext: boolean;
+    /**
+     * Let the side chat run one-shot shell executors (`bash`/`pwsh`). On by
+     * default: the read-only sandbox owns file effects, so a query like
+     * `ls -lt | head` must work. Turn it off to allow only the plugin's own
+     * read-only tools (background jobs and sandbox escalation stay refused
+     * either way).
+     */
+    readonly allowShellQueries: boolean;
     /** Settled main-session turns the digest retains. */
     readonly digestTurns: number;
     /** Largest number of main-session log lines one history read returns. */
@@ -38,6 +46,7 @@ export declare const Config: Schema<Schemastery.ObjectS<NoInfer<{
     readOnly: Schema<boolean, boolean, "defined">;
     allowReportToMain: Schema<boolean, boolean, "volatile-defined">;
     liveContext: Schema<boolean, boolean, "defined">;
+    allowShellQueries: Schema<boolean, boolean, "defined">;
     digestTurns: Schema<number, number, "defined">;
     historyEventLimit: Schema<number, number, "defined">;
     preset: Schema<string, string, "defined">;
@@ -46,6 +55,7 @@ export declare const Config: Schema<Schemastery.ObjectS<NoInfer<{
     readOnly: Schema<boolean, boolean, "defined">;
     allowReportToMain: Schema<boolean, boolean, "volatile-defined">;
     liveContext: Schema<boolean, boolean, "defined">;
+    allowShellQueries: Schema<boolean, boolean, "defined">;
     digestTurns: Schema<number, number, "defined">;
     historyEventLimit: Schema<number, number, "defined">;
     preset: Schema<string, string, "defined">;

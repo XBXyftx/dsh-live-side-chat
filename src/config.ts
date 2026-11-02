@@ -23,6 +23,14 @@ export interface SideChatConfig {
    * chat step. Turning it off leaves only the on-demand status tool.
    */
   readonly liveContext: boolean
+  /**
+   * Let the side chat run one-shot shell executors (`bash`/`pwsh`). On by
+   * default: the read-only sandbox owns file effects, so a query like
+   * `ls -lt | head` must work. Turn it off to allow only the plugin's own
+   * read-only tools (background jobs and sandbox escalation stay refused
+   * either way).
+   */
+  readonly allowShellQueries: boolean
   /** Settled main-session turns the digest retains. */
   readonly digestTurns: number
   /** Largest number of main-session log lines one history read returns. */
@@ -41,6 +49,7 @@ export const Config = Schema.object({
   readOnly: Schema.boolean().default(true),
   allowReportToMain: Schema.boolean().default(true).volatile(),
   liveContext: Schema.boolean().default(true),
+  allowShellQueries: Schema.boolean().default(true),
   digestTurns: Schema.number().min(4).max(60).default(12),
   historyEventLimit: Schema.number().min(5).max(200).default(40),
   preset: Schema.string().default(''),

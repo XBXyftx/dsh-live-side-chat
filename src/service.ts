@@ -35,7 +35,7 @@ import {
   DIGEST_KEY, renderDigest, toolTarget, type SessionDigest,
 } from './digest.ts'
 import {
-  DESCRIPTOR_LABEL, DESCRIPTOR_PROVIDER, HISTORY_TOOL, MUTATING_TOOLS, SIDE_SESSION_PREFIX, STATUS_TOOL,
+  DESCRIPTOR_LABEL, DESCRIPTOR_PROVIDER, HISTORY_TOOL, SIDE_SESSION_PREFIX, STATUS_TOOL, readOnlyDenial,
   isSideChatSessionId,
 } from './protocol.ts'
 import { removeSessionArtifacts, resolveSessionsRoot } from './session-files.ts'
@@ -326,9 +326,8 @@ export class SideChatService {
       })
     }
     if (this.config.readOnly) {
-      agentCtx.tools.guard(exec => (MUTATING_TOOLS.includes(exec.name)
-        ? '侧边对话是只读的：不要修改文件或启动后台任务。请改用只读工具，或把结论汇报给用户。'
-        : undefined))
+      const allowShell = this.config.allowShellQueries
+      agentCtx.tools.guard(exec => readOnlyDenial(exec.name, exec.arguments, { allowShell }))
     }
     const tools = createSideChatTools({
       status: async () => await this.statusText(subject.childSessionId),

@@ -8,7 +8,7 @@ It is **not** a fork. It never copies the main session's history; it runs empty 
 
 - **Empty start** — the child session is created with no `seed` and no `isSeeded`, so the tab opens as a genuinely empty conversation. It can be created at any time; it no longer waits for the main session to complete a turn.
 - **Live digest, not a log copy** — the side chat learns about the main session from the plugin's own bounded `sideChatDigest` session projection, re-read as runtime context on every step. Work that happened *after* the side chat was created is visible; the digest is partial by design, so the model verifies details with the read-only tools before asserting them.
-- **Read-only** — the side session runs in the read-only sandbox mode (`sandbox/mode: read-only`), with approvals pinned to `never` and a tool guard on mutating tools. It can query, never write. The guard denies mutators by name but leaves the `run_code` transport alone, because a PTC preset exposes only that tool — mutators reached from inside a program are denied by the same guard, and the program body stays inside the read-only sandbox.
+- **Read-only** — the side session runs in the read-only sandbox mode (`sandbox/mode: read-only`), with approvals pinned to `never` and a tool guard on tools that change state. It can query, never write. The guard denies file-mutating tools (`write`/`edit`/…), persistent shells (`terminal`) and background jobs, and inspects arguments to refuse `run_in_background` and any `sandbox_permissions` escalation. One-shot shell queries (`ls`, `git log`) are allowed because the sandbox already refuses their writes; `run_code` is allowed because a PTC preset exposes only that transport. Mutators reached from inside a program hit the same guard. Read-only here means *no file effects*: the sandbox seam does not constrain network or process lifetime, so shell queries can reach the network — set `allowShellQueries: false` to allow only the plugin's own read-only tools.
 - **Temporary** — the side session is **hidden** from the left session list and lives only in the right sidebar. Closing the tab asks for confirmation and then destroys it (agent disposed, session files deleted).
 - **Non-interrupting** — the main session keeps working. The side chat reads the main session's live progress at any time, and only hands a result back (as a **queued follow-up turn**) when you explicitly ask for it or it is genuinely necessary.
 
@@ -66,6 +66,7 @@ Plugin-row configuration (override the `side-chat` row in a profile or `cordis.p
 | Field | Default | Meaning |
 |---|---|---|
 | `readOnly` | `true` | Force the read-only sandbox in side chats |
+| `allowShellQueries` | `true` | Allow one-shot shell queries (`bash`/`pwsh`); off restricts the side chat to the plugin's own read-only tools |
 | `allowReportToMain` | `true` (volatile) | Whether reporting back is allowed; editable in the settings panel |
 | `liveContext` | `true` | Inject the main session's digest as runtime context on every step; off leaves only the on-demand status tool |
 | `digestTurns` | `12` (4–60) | Settled main-session turns the digest retains |

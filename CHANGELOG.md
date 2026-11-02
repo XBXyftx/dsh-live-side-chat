@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-02
+
+### Fixed
+
+- Read-only shell queries were refused: the guard denied `bash`/`pwsh` by name, so a plain `ls -lt … | head` in the
+  side chat came back as "the side chat is read-only". The read-only sandbox is the component that owns file effects, and
+  it already refuses writes — denying the executor on top of that only blocked legitimate queries. The guard now denies
+  what actually changes state: file-mutating tools (`write`/`edit`/…), persistent shells (`terminal`/`terminal_write`)
+  and background jobs (`job_start`/`job_cancel`), plus, by inspecting arguments, `run_in_background` and any
+  `sandbox_permissions` escalation. One-shot `bash`/`pwsh` commands run, and their writes are refused by the sandbox.
+
+### Added
+
+- `allowShellQueries` (default `true`): turn it off to allow only the plugin's own read-only tools. Background work and
+  sandbox escalation stay refused either way.
+
 ## [0.4.2] - 2026-10-30
 
 ### Fixed

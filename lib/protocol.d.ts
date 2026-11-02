@@ -27,19 +27,28 @@ export declare const STATUS_TOOL = "side_chat_main_status";
 export declare const HISTORY_TOOL = "side_chat_main_history";
 export declare const REPORT_TOOL = "side_chat_report";
 /**
- * Tools that can mutate the workspace or spawn unmetered work. A read-only side
- * chat denies them by name in addition to its sandbox mode, because a sandbox
- * refuses the write while the tool itself still runs (and can burn tokens).
+ * Tools that can change files or leave work running after the call returns.
+ * A read-only side chat denies these by name: the sandbox already refuses the
+ * write, but the call would otherwise still run, burn tokens, and leave the
+ * model to discover the refusal the hard way.
  *
- * `run_code` is deliberately absent: under a PTC preset it is the only
- * transport a model may call directly, so denying it by name denies every tool
- * in the session, including this plugin's own read-only ones. What it carries
- * stays covered: the tools a program reaches run through the registry's
- * pre-execute gate on the same agent scope, so this guard still denies
- * `write`/`edit`/`bash` and friends there, and the program body itself runs
- * under the session's read-only sandbox policy.
+ * Shell executors are deliberately absent. `bash`/`pwsh` run plenty of
+ * read-only commands (`ls`, `git log`, `wc -l`), and the read-only sandbox is
+ * the component that owns file effects — denying the executor by name blocked
+ * legitimate queries while the sandbox already said no to the writes.
+ * `terminal`/`terminal_write` stay here because they open a persistent shell
+ * that outlives the call; `job_*` stay because they spawn unmetered work.
+ *
+ * `run_code` is absent for the same reason as the shell executors: under a PTC
+ * preset it is the only transport a model may call directly.
  */
 export declare const MUTATING_TOOLS: readonly string[];
+/** One-shot shell executors: allowed, because the sandbox owns their file effects. */
+export declare const SHELL_TOOLS: readonly string[];
+/** Answer for the read-only guard: `undefined` allows the call, a string denies it. */
+export declare function readOnlyDenial(name: string, args: unknown, options?: {
+    readonly allowShell?: boolean;
+}): string | undefined;
 /** Compose the sidebar resource address of one side chat. */
 export declare function sideChatAddress(sessionId: string): string;
 /**

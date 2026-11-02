@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  MUTATING_TOOLS, RESOURCE_PREFIX, SIDE_SESSION_PREFIX, isSideChatSessionId, parseSideChatAddress, sideChatAddress,
+  MUTATING_TOOLS, RESOURCE_PREFIX, SHELL_TOOLS, SIDE_SESSION_PREFIX, isSideChatSessionId, parseSideChatAddress,
+  readOnlyDenial, sideChatAddress,
 } from '../src/protocol.ts'
 
 test('address round-trips the session id', () => {
@@ -37,6 +38,22 @@ test('the read-only guard covers the expected mutating tools', () => {
   }
   assert.ok(!MUTATING_TOOLS.includes('read'))
   assert.ok(!MUTATING_TOOLS.includes('grep'))
+})
+
+test('the guard treats one-shot shell queries as read-only', () => {
+  assert.ok(SHELL_TOOLS.includes('bash'))
+  assert.ok(!MUTATING_TOOLS.includes('bash'), 'bash must not be denied by name: ls/git log are read-only')
+  assert.equal(readOnlyDenial('bash', { command: "ls -lt 'repo/dir' | head -40" }), undefined)
+  assert.equal(readOnlyDenial('bash', { command: 'git log -1' }), undefined)
+})
+
+test('the guard still refuses writes, background work and escalation', () => {
+  assert.ok(readOnlyDenial('write', {}) !== undefined)
+  assert.ok(readOnlyDenial('bash', { command: 'touch x', run_in_background: true }) !== undefined)
+  assert.ok(readOnlyDenial('bash', { command: 'ls', sandbox_permissions: 'workspace-write' }) !== undefined)
+  assert.ok(readOnlyDenial('run_code', { code: '1', sandbox_permissions: 'danger-full-access' }) !== undefined)
+  assert.ok(readOnlyDenial('job_start', {}) !== undefined)
+  assert.ok(readOnlyDenial('bash', { command: 'ls' }, { allowShell: false }) !== undefined)
 })
 
 test('the guard never blocks the PTC transport', () => {

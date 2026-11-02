@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     const PACKAGE_NAME = 'dsh-live-side-chat'
     const NPM_LATEST_URL = `https://registry.npmjs.org/${PACKAGE_NAME}/latest`
     /** Kept in step with package.json; the bundle registry supersedes it when readable. */
-    const FALLBACK_VERSION = '0.4.2'
+    const FALLBACK_VERSION = '0.4.3'
 
     const zh = {
       'panel.label': '实时侧边对话',
